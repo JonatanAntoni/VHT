@@ -1,12 +1,15 @@
+# -*- coding: utf-8 -*-
+
+import boto3
 import logging
 import os
-import sys
 import time
-import boto3
+
 from botocore.exceptions import ClientError
 from botocore.exceptions import WaiterError
 
-class AWSClient():
+
+class AWSClient:
     """
     VHT AWS Backend
 
@@ -60,13 +63,13 @@ class AWSClient():
         """
         if os.environ.get('AWS_ACCESS_KEY_ID') is None:
             logging.info("aws:AWS_ACCESS_KEY_ID environment variable not present!")
-            sys.exit(1)
+            raise RuntimeError("aws:AWS_ACCESS_KEY_ID environment variable not present!")
         else:
             logging.debug('aws:AWS_ACCESS_KEY_ID present!')
 
         if os.environ.get('AWS_SECRET_ACCESS_KEY') is None:
             logging.info("aws:AWS_SECRET_ACCESS_KEY environment variable not present!")
-            sys.exit(1)
+            raise RuntimeError("aws:AWS_SECRET_ACCESS_KEY environment variable not present!")
         else:
             logging.debug('aws:AWS_SECRET_ACCESS_KEY present!')
 
@@ -106,12 +109,12 @@ class AWSClient():
             self.ami_version = os.environ.get('ami_version')
             if not self.ami_id and not self.ami_version:
                 logging.error("Either `ami_id` or `ami_version` should be presented as env var!")
-                sys.exit(-1)
+                raise RuntimeError("Either `ami_id` or `ami_version` should be presented as env var!")
             if not self.ami_id:
                 self.ami_id = self.get_image_id()
             if self.ami_id == '':
                 logging.error('AMI ID should not be blank. You should inform either vht_ami_id or vht_ami_version')
-                sys.exit(-1)
+                raise RuntimeError('AMI ID should not be blank. You should inform either vht_ami_id or vht_ami_version')
 
             # Optional: key_name
             self.key_name = os.environ.get('key_name')
@@ -125,8 +128,8 @@ class AWSClient():
             ]
             for env_ in envs:
                 if os.environ.get(env_) in (None, ''):
-                    logging.error(f"aws:environment variable `{env_}` needs to be present!")
-                    sys.exit(-1)
+                    logging.error("aws:environment variable `%s` needs to be present!", env_)
+                    raise RuntimeError("aws:environment variable `%s` needs to be present!", env_)
             self.iam_profile = os.environ.get('iam_profile')
             self.instance_type = os.environ.get('instance_type')
             self.security_group_id = os.environ.get('security_group_id')
@@ -147,8 +150,8 @@ class AWSClient():
         ]
         for env_ in envs:
             if os.environ.get(env_) in (None, ''):
-                logging.error(f"vht_github_action:environment variable `{env_}` needs to be present!")
-                sys.exit(-1)
+                logging.error("vht_github_action:environment variable `%s` needs to be present!", env_)
+                raise RuntimeError("vht_github_action:environment variable `%s` needs to be present!", env_)
 
         self.gh_workspace = os.environ.get('gh_workspace')
         self.s3_bucket_name = os.environ.get('s3_bucket_name')
@@ -603,7 +606,7 @@ class AWSClient():
             logging.error(f"Command {command_list} failed")
             logging.error("Tearing down the EC2 instance!")
             self.teardown()
-            sys.exit(-1)
+            raise RuntimeError()
 
         return response
 

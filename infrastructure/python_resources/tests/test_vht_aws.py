@@ -1,15 +1,17 @@
+# -*- coding: utf-8 -*-
+
 import datetime
 import os
-import logging
 import unittest
 
 from unittest.mock import patch, Mock
 from dateutil.tz import tzutc, tzlocal
-from vht import vht
+from vht import VHTClient, AWSClient
 
 # stubbers
 # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/stubber.html#
 # https://stackoverflow.com/questions/37143597/mocking-boto3-s3-client-method-python/37144161#37144161
+
 
 class TestVhtAws(unittest.TestCase):
     """
@@ -17,21 +19,13 @@ class TestVhtAws(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        cls.data = {}
+        cls.data = {'gh_workspace': 'test\\', 's3_bucket_name': 'gh-orta-vht', 's3_keyprefix': 'ssm_test',
+                    'ami_id': 'i-dsad3213d', 'ami_version': '1.1.0', 'iam_profile': 'Proj-vht-limited-actions',
+                    'instance_id': 'i-instance342321', 'instance_type': 't2.micro', 'key_name': 'common',
+                    'security_group_id': 'sg-04022e04e91197ce3', 'subnet_id': 'subnet-00455495b268076f0',
+                    'terminate_ec2_instance': True}
         # mandatory data
-        cls.data['gh_workspace'] = 'test\\'
-        cls.data['s3_bucket_name'] = 'gh-orta-vht'
-        cls.data['s3_keyprefix'] = 'ssm_test'
         # optional data
-        cls.data['ami_id'] = 'i-dsad3213d'
-        cls.data['ami_version'] = '1.1.0'
-        cls.data['iam_profile'] = 'Proj-vht-limited-actions'
-        cls.data['instance_id'] = 'i-instance342321'
-        cls.data['instance_type'] = 't2.micro'
-        cls.data['key_name'] = 'common'
-        cls.data['security_group_id'] = 'sg-04022e04e91197ce3'
-        cls.data['subnet_id'] = 'subnet-00455495b268076f0'
-        cls.data['terminate_ec2_instance'] = True
 
     def get_vht_aws_instance(self):
         self.set_mandatory_env_vars()
@@ -41,8 +35,8 @@ class TestVhtAws(unittest.TestCase):
         self.set_instance_id_env()
         self.set_s3_keyprefix_env()
         self.set_key_name_env()
-        with patch.object(vht.aws.AWSClient, '_is_aws_credentials_present', return_value=True):
-            aws_client = vht.VHTClient("aws").backend
+        with patch.object(AWSClient, '_is_aws_credentials_present', return_value=True):
+            aws_client = VHTClient("aws").backend
         self.del_ami_id_env()
         self.del_ami_version_env()
         self.del_create_instance_env_vars()
@@ -101,23 +95,23 @@ class TestVhtAws(unittest.TestCase):
         del os.environ["s3_keyprefix"]
 
     def test_vht_aws_setup(self):
-        with patch.object(vht.aws.AWSClient, '_is_aws_credentials_present', return_value=True):
+        with patch.object(AWSClient, '_is_aws_credentials_present', return_value=True):
             self.set_mandatory_env_vars()
             self.set_create_instance_env_vars()
 
             # test with ami_id
             self.set_ami_id_env()
-            aws_client = vht.VHTClient("aws").backend
+            aws_client = VHTClient("aws").backend
 
             # test with key_name
             self.set_key_name_env()
-            aws_client = vht.VHTClient("aws").backend
+            aws_client = VHTClient("aws").backend
             assert aws_client.key_name == self.data['key_name'], \
                 f"Found {aws_client.key_name}. Expected {self.data['key_name']}"
             self.del_key_name_env()
 
             # test mandatory env vars
-            aws_client = vht.VHTClient("aws").backend
+            aws_client = VHTClient("aws").backend
             assert aws_client.instance_type == self.data['instance_type'], \
                 f"Found {aws_client.instance_type}. Expected {self.data['instance_type']}"
             assert aws_client.iam_profile == self.data['iam_profile'], \
@@ -148,15 +142,15 @@ class TestVhtAws(unittest.TestCase):
 
             # test with ami_id && ami_version
             self.set_ami_version_env()
-            aws_client = vht.VHTClient("aws").backend
+            aws_client = VHTClient("aws").backend
             assert aws_client.ami_id == self.data['ami_id'], \
                 f"Found {aws_client.ami_id}. Expected {self.data['ami_id']}"
             assert aws_client.ami_version == self.data['ami_version'], \
                 f"Found {aws_client.ami_version}. Expected {self.data['ami_version']}"
 
             # test with ami_version()
-            with patch.object(vht.aws.AWSClient, 'get_image_id', return_value=self.data['ami_id']):
-                aws_client = vht.VHTClient("aws").backend
+            with patch.object(AWSClient, 'get_image_id', return_value=self.data['ami_id']):
+                aws_client = VHTClient("aws").backend
                 assert aws_client.ami_id == self.data['ami_id'], \
                     f"Found {aws_client.ami_id}. Expected {self.data['ami_id']}"
                 assert aws_client.ami_version == self.data['ami_version'], \
@@ -167,7 +161,7 @@ class TestVhtAws(unittest.TestCase):
             # test with instance id
             self.del_create_instance_env_vars()
             self.set_instance_id_env()
-            aws_client = vht.VHTClient("aws").backend
+            aws_client = VHTClient("aws").backend
             assert aws_client.instance_id == self.data['instance_id'], \
                 f"Found {aws_client.instance_id}. Expected {self.data['instance_id']}"
             assert aws_client.ami_id is None, \
@@ -177,7 +171,7 @@ class TestVhtAws(unittest.TestCase):
 
             # test with s3_keyprefix
             self.set_s3_keyprefix_env()
-            aws_client = vht.VHTClient("aws").backend
+            aws_client = VHTClient("aws").backend
             assert aws_client.s3_keyprefix == self.data['s3_keyprefix'], \
                 f"Found {aws_client.s3_keyprefix}. Expected {self.data['s3_keyprefix']}"
 

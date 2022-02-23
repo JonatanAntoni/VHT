@@ -1,9 +1,11 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import argparse
-import json
 import logging
-from vht import vht
+
+from vht import VHTClient
+
 
 def main():
     # Parser
@@ -64,12 +66,11 @@ def main():
     args = parser.parse_args()
     if args.verbosity:
         verbosity = args.verbosity
-        level = { "DEBUG": 10, "INFO": 20, "WARNING" : 30, "ERROR" : 40 }
-        logging.basicConfig(format='[%(levelname)s]\t%(message)s', level = verbosity)
-        logging.debug("Verbosity level is set to " + verbosity)
+        logging.basicConfig(format='[%(levelname)s]\t%(message)s', level=verbosity)
+        logging.debug("Verbosity level is set to %s", verbosity)
 
     # vht_instance using args.backend
-    vht_client = vht.VHTClient(args.backend)
+    vht_client = VHTClient(args.backend)
 
     if args.create_instance:
         print(vht_client.create_instance())
@@ -106,6 +107,7 @@ def main():
         filename = args.upload_file_to_cloud[0]
         key = args.upload_file_to_cloud[1]
         vht_client.upload_file_to_cloud(filename, key)
+
 
 if __name__ == '__main__':
     main()

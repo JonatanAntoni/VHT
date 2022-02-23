@@ -1,8 +1,11 @@
-import logging
-import sys
-from vht import aws
+# -*- coding: utf-8 -*-
 
-class VHTClient():
+import logging
+
+from .awsclient import AWSClient
+
+
+class VHTClient:
     def __init__(self, backend):
         self.backend_desc = backend.lower()
         logging.info(f"vht:{self.backend_desc} backend selected!")
@@ -10,10 +13,10 @@ class VHTClient():
 
     def _set_backend(self):
         if self.backend_desc == "aws":
-            self.backend = aws.AWSClient()
+            self.backend = AWSClient()
         else:
             logging.error(f"{self.backend_desc} not supported!")
-            sys.exit(-1)
+            raise RuntimeError()
 
     def create_instance(self):
         return self.backend.create_instance()
@@ -36,12 +39,12 @@ class VHTClient():
     def run(self):
         return self.backend.run()
 
-    def send_remote_command(self, command_list, working_dir, fail_if_unsuccess = True):
+    def send_remote_command(self, command_list, working_dir, fail_if_unsuccess=True):
         return self.backend.send_remote_command(command_list=command_list,
                                                 working_dir=working_dir,
                                                 fail_if_unsuccess=fail_if_unsuccess)
 
-    def send_remote_command_batch(self, command_list, working_dir, fail_if_unsuccess = True):
+    def send_remote_command_batch(self, command_list, working_dir, fail_if_unsuccess=True):
         return self.backend.send_remote_command_batch(
                                                 command_list=command_list,
                                                 working_dir=working_dir,
