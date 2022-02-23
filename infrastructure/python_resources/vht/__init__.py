@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from .vhtclient import VHTClient
-from .awsclient import AWSClient
+from .aws_backend import AwsBackend
 
-__all__ = ['VHTClient', 'AWSClient']
+__all__ = ['VHTClient', 'AwsBackend', 'LocalBackend']

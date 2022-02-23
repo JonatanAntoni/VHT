@@ -7,9 +7,13 @@ import time
 
 from botocore.exceptions import ClientError
 from botocore.exceptions import WaiterError
+from pathlib import Path
 
+from .backend import VhtBackend
 
-class AWSClient:
+class AwsBackend(VhtBackend):
+    AMI_WORKDIR='/home/ubuntu'
+
     """
     VHT AWS Backend
 
@@ -42,7 +46,7 @@ class AWSClient:
         return (
             f"ami_id={self.ami_id},"
             f"ami_version={self.ami_version},"
-            f"gh_workspace={self.gh_workspace},"
+            f"workspace={self.workspace},"
             f"iam_profile={self.iam_profile},"
             f"instance_id={self.instance_id},"
             f"instance_type={self.instance_type},"
@@ -52,7 +56,7 @@ class AWSClient:
             f"subnet_id={self.subnet_id},"
             f"vht_in_filename={self.vht_in_filename},"
             f"vht_out_filename={self.vht_out_filename},"
-            f"terminate_ec2_instance={self.terminate_ec2_instance}"
+            f"terminate_ec2_instance={self.keep_ec2_instance}"
         )
 
     def _is_aws_credentials_present(self):
@@ -87,7 +91,7 @@ class AWSClient:
         logging.info("aws:setting up aws backend")
         self.ami_id = None
         self.ami_version = None
-        self.gh_workspace = None
+        self.workspace = None
         self.iam_profile = None
         self.instance_id = None
         self.instance_type = None
@@ -95,68 +99,61 @@ class AWSClient:
         self.s3_bucket_name = None
         self.security_group_id = None
         self.subnet_id = None
-        self.terminate_ec2_instance = None
+        self.keep_ec2_instance = None
         self.vht_in_filename = 'vht.tar'
         self.vht_out_filename = 'out.tar'
 
         # instance_id
-        self.instance_id = None if os.environ.get('instance_id') in (None, '') else os.environ.get('instance_id')
+        self.instance_id = os.environ.get('AWS_INSTANCE_ID', None)
         # ami_id & ami_version
 
         # EC2-related info is not needed if an instance is already created
         if self.instance_id is None:
-            self.ami_id = os.environ.get('ami_id')
-            self.ami_version = os.environ.get('ami_version')
+            self.ami_id = os.environ.get('AWS_AMI_ID')
+            self.ami_version = os.environ.get('AWS_AMI_VERSION')
             if not self.ami_id and not self.ami_version:
-                logging.error("Either `ami_id` or `ami_version` should be presented as env var!")
-                raise RuntimeError("Either `ami_id` or `ami_version` should be presented as env var!")
+                logging.error("Either `AWS_AMI_ID` or `AWS_AMI_VERSION` should be presented as env var!")
+                raise RuntimeError("Either `AWS_AMI_ID` or `AWS_AMI_VERSION` should be presented as env var!")
             if not self.ami_id:
                 self.ami_id = self.get_image_id()
             if self.ami_id == '':
-                logging.error('AMI ID should not be blank. You should inform either vht_ami_id or vht_ami_version')
-                raise RuntimeError('AMI ID should not be blank. You should inform either vht_ami_id or vht_ami_version')
+                logging.error('AWS_AMI_ID must not be blank. You should inform either AWS_AMI_ID or provide a valid AWS_AMI_VERSION')
+                raise RuntimeError('AWS_AMI_ID must not be blank. You should inform either AWS_AMI_ID or provide a valid AWS_AMI_VERSION')
 
             # Optional: key_name
-            self.key_name = os.environ.get('key_name')
+            self.key_name = os.environ.get('AWS_KEY_NAME')
 
             envs = [
-                'iam_profile',
-                'instance_type',
-                'security_group_id',
-                'subnet_id',
-                'terminate_ec2_instance'
+                'AWS_IAM_PROFILE',
+                'AWS_SECURITY_GROUP_ID',
+                'AWS_SUBNET_ID'
             ]
-            for env_ in envs:
-                if os.environ.get(env_) in (None, ''):
+            for env in envs:
+                if env not in os.environ:
                     logging.error("aws:environment variable `%s` needs to be present!", env_)
                     raise RuntimeError("aws:environment variable `%s` needs to be present!", env_)
-            self.iam_profile = os.environ.get('iam_profile')
-            self.instance_type = os.environ.get('instance_type')
-            self.security_group_id = os.environ.get('security_group_id')
-            self.subnet_id = os.environ.get('subnet_id')
-            self.terminate_ec2_instance = os.environ.get('terminate_ec2_instance')
-            if self.terminate_ec2_instance.lower() == 'true':
-                self.terminate_ec2_instance = True
-            else:
-                self.terminate_ec2_instance = False
+            self.iam_profile = os.environ.get('AWS_IAM_PROFILE')
+            self.instance_type = os.environ.get('AWS_INSTANCE_TYPE', 't2.micro')
+            self.security_group_id = os.environ.get('AWS_SECURITY_GROUP_ID')
+            self.subnet_id = os.environ.get('AWS_SUBNET_ID')
+            self.keep_ec2_instance = (os.environ.get('AWS_KEEP_EC2_INSTANCES', 'false').lower()  == 'true')
 
         # s3_keyprefix
-        self.s3_keyprefix = 'ssm' if os.environ.get('s3_keyprefix') in (None, '') else os.environ.get('s3_keyprefix')
+        self.s3_keyprefix = os.environ.get('AWS_S3_KEYPREFIX', 'ssm')
 
         # check mandatory env vars
         envs = [
-            'gh_workspace',
-            's3_bucket_name',
+            'AWS_S3_BUCKET',
         ]
-        for env_ in envs:
-            if os.environ.get(env_) in (None, ''):
-                logging.error("vht_github_action:environment variable `%s` needs to be present!", env_)
-                raise RuntimeError("vht_github_action:environment variable `%s` needs to be present!", env_)
+        for env in envs:
+            if env not in os.environ:
+                logging.error("aws:environment variable `%s` needs to be present!", env_)
+                raise RuntimeError("aws:environment variable `%s` needs to be present!", env_)
 
-        self.gh_workspace = os.environ.get('gh_workspace')
-        self.s3_bucket_name = os.environ.get('s3_bucket_name')
-        self.vht_in = f"{self.gh_workspace}/{self.vht_in_filename}"
-        self.vht_out = f"{self.gh_workspace}/{self.vht_out_filename}"
+        self.workspace = os.environ.get('VHT_WORKSPACE', os.getcwd())
+        self.s3_bucket_name = os.environ.get('AWS_S3_BUCKET')
+        self.vht_in = f"{self.workspace}/{self.vht_in_filename}"
+        self.vht_out = f"{self.workspace}/{self.vht_out_filename}"
 
         logging.info(f"aws:aws__repr__:{self.__repr__()}")
 
@@ -534,12 +531,33 @@ class AWSClient:
             f"runuser -l ubuntu -c 'aws s3 cp /home/ubuntu/vhtwork/{self.vht_out_filename} s3://{self.s3_bucket_name}/{self.vht_out_filename}'"
         ]
 
-    def run(self, delete_output_file_from_cloud=True):
-        if self.instance_id in ('', None):
+    def create_or_start_instance(self):
+        if not self.instance_id:
             self.create_instance()
-        else:
-            logging.info(f"aws:EC2 Instance {self.instance_id} provided!")
-            self.start_instance()
+            return VhtBackend.INSTANCE_CREATED
+
+        logging.info(f"aws:EC2 Instance {self.instance_id} provided!")
+        self.start_instance()
+        return VhtBackend.INSTANCE_STARTED
+
+    def prepare_instance(self):
+        commands = [
+            "runuser -l ubuntu -c 'cat ~/.bashrc | grep export > vars'",
+            "rm -rf /home/ubuntu/workspace",
+            "runuser -l ubuntu -c 'mkdir workspace'",
+            "runuser -l ubuntu -c 'mkdir -p /home/ubuntu/packs/.Web'",
+            "runuser -l ubuntu -c 'wget -N https://www.keil.com/pack/index.pidx -O /home/ubuntu/packs/.Web/index.pidx'",
+            "apt update",
+            "apt install awscli -y"
+        ]
+        self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+
+    def run_commands(self, cmds):
+        commands = [f"runuser -l ubuntu -c 'source vars && {cmd}'" for cmd in cmds]
+        self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+
+    def run(self, delete_output_file_from_cloud=True):
+        self.create_or_start_instance()
 
         self.upload_file_to_cloud(self.vht_in, self.vht_in_filename)
         self.send_remote_command_batch(self.get_process_vht_commands(), working_dir='/home/ubuntu')
@@ -555,6 +573,26 @@ class AWSClient:
             self.delete_file_from_cloud(key=self.vht_out_filename)
 
         self.teardown()
+
+    def upload_workspace(self, filename):
+        if filename is str:
+            filename = Path(filename)
+        self.upload_file_to_cloud(filename, filename.name)
+        commands = [
+            f"runuser -l ubuntu -c 'aws s3 cp s3://{self.s3_bucket_name}/{filename.name} /home/ubuntu/{filename.name}'",
+            f"runuser -l ubuntu -c 'cd vhtwork; tar xf ../{filename.name}'"
+        ]
+        self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+
+    def download_workspace(self, filename):
+        if filename is str:
+            filename = Path(filename)
+        commands = [
+            f"runuser -l ubuntu -c 'cd vhtwork; tar cjf ../{filename.name}'"
+            f"runuser -l ubuntu -c 'aws s3 cp /home/ubuntu/{filename.name} s3://{self.s3_bucket_name}/{filename.name}'"
+        ]
+        self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+        self.download_file_from_cloud(filename, filename.name)
 
     def upload_file_to_cloud(self, filename, key):
         """
@@ -877,15 +915,22 @@ class AWSClient:
             }
         )
 
+    def cleanup_instance(self, state):
+        if state == VhtBackend.INSTANCE_RUNNING:
+            pass
+        elif (state == VhtBackend.INSTANCE_STARTED) or self.keep_ec2_instance:
+            self.stop_instance()
+        self.terminate_instance()
+
     def teardown(self):
         """
             Teardown
         """
         # if terminate_instance is True Terminate Otherwise Stop instance
-        if self.terminate_ec2_instance:
-            self.terminate_instance()
-        else:
+        if self.keep_ec2_instance:
             self.stop_instance()
+        else:
+            self.terminate_instance()
 
     def wait_ssm_command_finished(self, command_id, delay=5, max_attempts=120):
         """

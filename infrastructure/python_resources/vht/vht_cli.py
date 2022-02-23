@@ -56,10 +56,11 @@ def main():
     parser.add_argument('-v', '--verbosity',
                         type=str,
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                        default='INFO',
                         help='Set the output verbosity DEBUG, INFO, WARNING, ERROR. Default: `INFO`')
     parser.add_argument('-b', '--backend',
                         type=str,
-                        choices=['aws'],
+                        choices=['aws', 'local'],
                         default='aws',
                         help='Select your aws. Default: `aws`')
     parser.parse_args()
