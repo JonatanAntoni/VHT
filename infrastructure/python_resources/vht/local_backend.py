@@ -5,15 +5,25 @@ import subprocess
 import tarfile
 
 from tempfile import TemporaryDirectory
+from typing import List
 
 from .backend import VhtBackend
 
+
 class LocalBackend(VhtBackend):
+
+    @staticmethod
+    def name() -> str:
+        return "local"
+
+    @staticmethod
+    def priority() -> int:
+        return 50
 
     def __init__(self):
         self.workdir = TemporaryDirectory(prefix="vhtwork-")
 
-    def create_or_start_instance(self):
+    def create_or_start_instance(self, instance_id: str = None):
         return VhtBackend.INSTANCE_RUNNING
 
     def cleanup_instance(self, state):
@@ -28,7 +38,7 @@ class LocalBackend(VhtBackend):
         with tarfile.open(tarball, mode='r:bz2') as archive:
             archive.extractall(path=self.workdir.name)
 
-    def run_commands(self, cmds):
+    def run_commands(self, cmds: List[str]):
         for cmd in cmds:
             logging.info("VHT> %s", self.workdir.name)
             subprocess.run(cmd, shell=True, cwd=self.workdir.name)

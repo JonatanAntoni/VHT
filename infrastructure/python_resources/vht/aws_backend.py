@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from typing import List
 
 import boto3
 import logging
@@ -8,11 +9,21 @@ import time
 from botocore.exceptions import ClientError
 from botocore.exceptions import WaiterError
 from pathlib import Path
+from textwrap import dedent
 
 from .backend import VhtBackend
 
+
 class AwsBackend(VhtBackend):
-    AMI_WORKDIR='/home/ubuntu'
+    AMI_WORKDIR = '/home/ubuntu'
+
+    @staticmethod
+    def name() -> str:
+        return "aws"
+
+    @staticmethod
+    def priority() -> int:
+        return 10
 
     """
     VHT AWS Backend
@@ -93,7 +104,7 @@ class AwsBackend(VhtBackend):
         self.ami_version = None
         self.workspace = None
         self.iam_profile = None
-        self.instance_id = None
+        self.instance_id: str = None
         self.instance_type = None
         self.key_name = None
         self.s3_bucket_name = None
@@ -130,13 +141,13 @@ class AwsBackend(VhtBackend):
             ]
             for env in envs:
                 if env not in os.environ:
-                    logging.error("aws:environment variable `%s` needs to be present!", env_)
-                    raise RuntimeError("aws:environment variable `%s` needs to be present!", env_)
+                    logging.error("aws:environment variable `%s` needs to be present!", env)
+                    raise RuntimeError("aws:environment variable `%s` needs to be present!", env)
             self.iam_profile = os.environ.get('AWS_IAM_PROFILE')
             self.instance_type = os.environ.get('AWS_INSTANCE_TYPE', 't2.micro')
             self.security_group_id = os.environ.get('AWS_SECURITY_GROUP_ID')
             self.subnet_id = os.environ.get('AWS_SUBNET_ID')
-            self.keep_ec2_instance = (os.environ.get('AWS_KEEP_EC2_INSTANCES', 'false').lower()  == 'true')
+            self.keep_ec2_instance = (os.environ.get('AWS_KEEP_EC2_INSTANCES', 'false').lower() == 'true')
 
         # s3_keyprefix
         self.s3_keyprefix = os.environ.get('AWS_S3_KEYPREFIX', 'ssm')
@@ -147,8 +158,8 @@ class AwsBackend(VhtBackend):
         ]
         for env in envs:
             if env not in os.environ:
-                logging.error("aws:environment variable `%s` needs to be present!", env_)
-                raise RuntimeError("aws:environment variable `%s` needs to be present!", env_)
+                logging.error("aws:environment variable `%s` needs to be present!", env)
+                raise RuntimeError("aws:environment variable `%s` needs to be present!", env)
 
         self.workspace = os.environ.get('VHT_WORKSPACE', os.getcwd())
         self.s3_bucket_name = os.environ.get('AWS_S3_BUCKET')
@@ -331,7 +342,7 @@ class AwsBackend(VhtBackend):
         """
         return self.instance_id
 
-    def get_instance_state(self):
+    def get_instance_state(self, instance_id: str = None):
         """
         Get EC2 Instance State
 
@@ -347,14 +358,14 @@ class AwsBackend(VhtBackend):
         """
         response = self.ec2_client.describe_instances(
             InstanceIds=[
-                self.instance_id,
+                instance_id or self.instance_id,
             ],
         )
 
         logging.debug(f"aws:get_instance_state: {response}")
-        self.instance_state = response['Reservations'][0]['Instances'][0]['State']['Name']
-        logging.info(f"aws:The EC2 instance state is {self.instance_state}...")
-        return self.instance_state
+        instance_state = response['Reservations'][0]['Instances'][0]['State']['Name']
+        logging.info(f"aws:The EC2 instance state is {instance_state}...")
+        return instance_state
 
     def get_s3_file_content(self, key):
         """
@@ -531,36 +542,45 @@ class AwsBackend(VhtBackend):
             f"runuser -l ubuntu -c 'aws s3 cp /home/ubuntu/vhtwork/{self.vht_out_filename} s3://{self.s3_bucket_name}/{self.vht_out_filename}'"
         ]
 
-    def create_or_start_instance(self):
-        if not self.instance_id:
-            self.create_instance()
-            return VhtBackend.INSTANCE_CREATED
+    def create_or_start_instance(self, instance_id: str = None):
+        self.instance_id = instance_id or self.instance_id
 
-        logging.info(f"aws:EC2 Instance {self.instance_id} provided!")
-        self.start_instance()
-        return VhtBackend.INSTANCE_STARTED
+        if self.instance_id:
+            state = self.get_instance_state()
+            if state == "running":
+                logging.info(f"aws:EC2 Instance {self.instance_id} already running!")
+                return VhtBackend.INSTANCE_RUNNING
+            elif state == "stopped":
+                logging.info(f"aws:EC2 Instance {self.instance_id} provided!")
+                self.start_instance()
+                return VhtBackend.INSTANCE_STARTED
+            else:
+                logging.warning(f"aws:EC2 Instance {self.instance_id} cannot be reused from state '{state}'!")
+
+        self.create_instance()
+        return VhtBackend.INSTANCE_CREATED
 
     def prepare_instance(self):
         commands = [
-            "runuser -l ubuntu -c 'cat ~/.bashrc | grep export > vars'",
-            "rm -rf /home/ubuntu/workspace",
-            "runuser -l ubuntu -c 'mkdir workspace'",
-            "runuser -l ubuntu -c 'mkdir -p /home/ubuntu/packs/.Web'",
-            "runuser -l ubuntu -c 'wget -N https://www.keil.com/pack/index.pidx -O /home/ubuntu/packs/.Web/index.pidx'",
+            f"runuser -l ubuntu -c 'cat ~/.bashrc | grep export > {self.AMI_WORKDIR}/vars'",
+            f"runuser -l ubuntu -c 'rm -rf {self.AMI_WORKDIR}/workspace'",
+            f"runuser -l ubuntu -c 'mkdir -p {self.AMI_WORKDIR}/workspace'",
+            f"runuser -l ubuntu -c 'mkdir -p {self.AMI_WORKDIR}/packs/.Web'",
+            f"runuser -l ubuntu -c 'wget -N https://www.keil.com/pack/index.pidx -O {self.AMI_WORKDIR}/packs/.Web/index.pidx'",
             "apt update",
             "apt install awscli -y"
         ]
         self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
 
-    def run_commands(self, cmds):
-        commands = [f"runuser -l ubuntu -c 'source vars && {cmd}'" for cmd in cmds]
-        self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+    def run_commands(self, cmds: List[str]):
+        commands = [f"runuser -l ubuntu -c 'source {self.AMI_WORKDIR}/vars && {cmd}'" for cmd in cmds]
+        self.send_remote_command_batch(commands, working_dir=f"{self.AMI_WORKDIR}/workspace")
 
     def run(self, delete_output_file_from_cloud=True):
         self.create_or_start_instance()
 
         self.upload_file_to_cloud(self.vht_in, self.vht_in_filename)
-        self.send_remote_command_batch(self.get_process_vht_commands(), working_dir='/home/ubuntu')
+        self.send_remote_command_batch(self.get_process_vht_commands(), working_dir=AwsBackend.AMI_WORKDIR)
 
         logging.info("aws:Download S3 File to the GitHub Runner...")
         self.download_file_from_cloud(
@@ -575,24 +595,32 @@ class AwsBackend(VhtBackend):
         self.teardown()
 
     def upload_workspace(self, filename):
-        if filename is str:
+        if isinstance(filename, str):
             filename = Path(filename)
-        self.upload_file_to_cloud(filename, filename.name)
-        commands = [
-            f"runuser -l ubuntu -c 'aws s3 cp s3://{self.s3_bucket_name}/{filename.name} /home/ubuntu/{filename.name}'",
-            f"runuser -l ubuntu -c 'cd vhtwork; tar xf ../{filename.name}'"
-        ]
-        self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+        try:
+            self.upload_file_to_cloud(str(filename), filename.name)
+            commands = [
+                f"runuser -l ubuntu -c 'aws s3 cp s3://{self.s3_bucket_name}/{filename.name} {self.AMI_WORKDIR}/{filename.name}'",
+                f"runuser -l ubuntu -c 'cd {self.AMI_WORKDIR}/workspace; tar xvf {self.AMI_WORKDIR}/{filename.name}'",
+                f"runuser -l ubuntu -c 'rm -f {self.AMI_WORKDIR}/{filename.name}'"
+            ]
+            self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+        finally:
+            self.delete_file_from_cloud(filename.name)
 
     def download_workspace(self, filename):
-        if filename is str:
+        if isinstance(filename, str):
             filename = Path(filename)
-        commands = [
-            f"runuser -l ubuntu -c 'cd vhtwork; tar cjf ../{filename.name}'"
-            f"runuser -l ubuntu -c 'aws s3 cp /home/ubuntu/{filename.name} s3://{self.s3_bucket_name}/{filename.name}'"
-        ]
-        self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
-        self.download_file_from_cloud(filename, filename.name)
+        try:
+            commands = [
+                f"runuser -l ubuntu -c 'cd {self.AMI_WORKDIR}/workspace; tar cvjf {self.AMI_WORKDIR}/{filename.name} .'",
+                f"runuser -l ubuntu -c 'aws s3 cp {self.AMI_WORKDIR}/{filename.name} s3://{self.s3_bucket_name}/{filename.name}'",
+                f"runuser -l ubuntu -c 'rm -f {self.AMI_WORKDIR}/{filename.name}'"
+            ]
+            self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+            self.download_file_from_cloud(str(filename), filename.name)
+        finally:
+            self.delete_file_from_cloud(filename.name)
 
     def upload_file_to_cloud(self, filename, key):
         """
@@ -642,8 +670,6 @@ class AwsBackend(VhtBackend):
             logging.info(f"vht:{i} = {response[i].strip()}")
         if response['CommandIdStatus'] != 'Success' and fail_if_unsuccess:
             logging.error(f"Command {command_list} failed")
-            logging.error("Tearing down the EC2 instance!")
-            self.teardown()
             raise RuntimeError()
 
         return response
@@ -920,7 +946,8 @@ class AwsBackend(VhtBackend):
             pass
         elif (state == VhtBackend.INSTANCE_STARTED) or self.keep_ec2_instance:
             self.stop_instance()
-        self.terminate_instance()
+        else:
+            self.terminate_instance()
 
     def teardown(self):
         """

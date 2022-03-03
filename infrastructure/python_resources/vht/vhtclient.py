@@ -4,32 +4,36 @@ import logging
 import os
 import tarfile
 
-from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import List
 
 from .backend import VhtBackend
-from .aws_backend import AwsBackend
-from .local_backend import LocalBackend
+
 
 class VHTClient:
+    @staticmethod
+    def get_available_backends() -> List[str]:
+        backends = VhtBackend.find_implementations()
+        return sorted(backends.keys(), key=lambda k: backends[k].priority())
+
     def __init__(self, backend):
         self.backend_desc = backend.lower()
         logging.info(f"vht:{self.backend_desc} backend selected!")
         self._set_backend()
 
     def _set_backend(self):
-        if self.backend_desc == "aws":
-            self.backend = AwsBackend()
-        elif self.backend_desc == "local":
-            self.backend = LocalBackend()
+        backends = VhtBackend.find_implementations()
+        if self.backend_desc in backends:
+            self.backend = backends[self.backend_desc]()
         else:
             logging.error(f"{self.backend_desc} not supported!")
             raise RuntimeError()
 
-    def create_instance(self):
+    def create_instance(self) -> str:
+        """Create a new VHT instance"""
         return self.backend.create_instance()
 
-    def delete_file_from_cloud(self, key):
+    def delete_file_from_cloud(self, key: str) -> str:
         return self.backend.delete_file_from_cloud(key)
 
     def download_file_from_cloud(self, filename, key):
@@ -38,19 +42,17 @@ class VHTClient:
     def get_image_id(self):
         return self.backend.get_image_id()
 
-    def get_instance_state(self):
-        return self.backend.get_instance_state()
+    def get_instance_state(self, instance_id: str):
+        return self.backend.get_instance_state(instance_id)
 
-    def get_process_vht_commands(self):
-        return self.backend.get_process_vht_commands()
-
-    def run(self, workdir=os.getcwd()):
+    def run(self, workdir: str = os.getcwd(), instance_id: str = None):
+        """Run the VHT job in the given WORKDIR"""
         vhtin = None
         vhtout = None
         instance_state = VhtBackend.INSTANCE_INVALID
         try:
             logging.info("Creating/staring instance...")
-            instance_state = self.backend.create_or_start_instance()
+            instance_state = self.backend.create_or_start_instance(instance_id)
 
             logging.info("Preparing instance...")
             self.backend.prepare_instance()
@@ -64,10 +66,10 @@ class VHTClient:
             self.backend.upload_workspace(vhtin.name)
 
             logging.info("Executing...")
-            self.backend.run_commands([
-                "pip install -r requirements.txt",
-                "python build.py cbuild vht"
-            ])
+            cmds = ["pip install -r requirements.txt",
+                    "python build.py cbuild vht"]
+
+            self.backend.run_commands(cmds)
 
             logging.info("Downloading workspace...")
             vhtout = NamedTemporaryFile(mode='r+b', prefix='vhtout-', suffix='.tbz2', delete=False)
@@ -81,8 +83,6 @@ class VHTClient:
             if vhtout:
                 os.remove(vhtout.name)
             self.backend.cleanup_instance(instance_state)
-
-
 
     def send_remote_command(self, command_list, working_dir, fail_if_unsuccess=True):
         return self.backend.send_remote_command(command_list=command_list,

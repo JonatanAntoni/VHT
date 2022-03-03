@@ -23,12 +23,14 @@ def version_from_git_tag():
         return f"{match.group(1)}+git{match.group(10)}.{match.group(11)}"
     return match.group(1)
 
+
 setup(
     name='vht',
     version='0.1.0',
     packages=['vht'],
     install_requires=[
-        'boto3~=1.20'
+        'boto3~=1.20',
+        'botocore~=1.20'
     ],
     extras_require={
         'dev': [
