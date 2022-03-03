@@ -37,16 +37,34 @@ class AwsBackend(VhtBackend):
     Some AWS-related info is expected as envs. See _setup.
     """
     def __init__(self):
-        self.ami_id: str = None
-        self.ami_version: str = None
-        self.iam_profile: str = None
-        self.instance_id: str = None
-        self.instance_type: str = None
-        self.key_name: str = None
-        self.s3_bucket_name: str = None
-        self.security_group_id: str = None
-        self.subnet_id: str = None
-        self.keep_ec2_instance: bool = None
+        self.ami_id: str = os.environ.get('AWS_AMI_ID', None)
+        self.ami_version: str = os.environ.get('AWS_AMI_VERSION', None)
+        self.iam_profile: str = os.environ.get('AWS_IAM_PROFILE', None)
+        self.instance_id: str = os.environ.get('AWS_INSTANCE_ID', None)
+        self.instance_type: str = os.environ.get('AWS_INSTANCE_TYPE', 't2.micro')
+        self.key_name: str = os.environ.get('AWS_KEY_NAME', None)
+        self.s3_bucket_name: str = os.environ.get('AWS_S3_BUCKET', None)
+        self.security_group_id: str = os.environ.get('AWS_SECURITY_GROUP_ID', None)
+        self.subnet_id: str = os.environ.get('AWS_SUBNET_ID', None)
+        self.keep_ec2_instance: bool = (os.environ.get('AWS_KEEP_EC2_INSTANCES', 'false').lower() == 'true')
+        self.s3_keyprefix = os.environ.get('AWS_S3_KEYPREFIX', 'ssm')
+
+    def __repr__(self):
+        return (
+            f"ami_id={self.ami_id},"
+            f"ami_version={self.ami_version},"
+            f"iam_profile={self.iam_profile},"
+            f"instance_id={self.instance_id},"
+            f"instance_type={self.instance_type},"
+            f"key_name={self.key_name},"
+            f"s3_bucket_name={self.s3_bucket_name},"
+            f"security_group_id={self.security_group_id},"
+            f"subnet_id={self.subnet_id},"
+            f"keep_ec2_instance={self.keep_ec2_instance}"
+        )
+
+    def _init(self):
+        self._init = lambda: None
 
         logging.info('aws:Creating EC2 client...')
         self._ec2_client = boto3.client('ec2')
@@ -62,20 +80,6 @@ class AwsBackend(VhtBackend):
 
         self._is_aws_credentials_present()
         self._setup()
-
-    def __repr__(self):
-        return (
-            f"ami_id={self.ami_id},"
-            f"ami_version={self.ami_version},"
-            f"iam_profile={self.iam_profile},"
-            f"instance_id={self.instance_id},"
-            f"instance_type={self.instance_type},"
-            f"key_name={self.key_name},"
-            f"s3_bucket_name={self.s3_bucket_name},"
-            f"security_group_id={self.security_group_id},"
-            f"subnet_id={self.subnet_id},"
-            f"keep_ec2_instance={self.keep_ec2_instance}"
-        )
 
     def _is_aws_credentials_present(self):
         """
@@ -108,54 +112,30 @@ class AwsBackend(VhtBackend):
         # Initializing None all VHT related variables
         logging.info("aws:setting up aws backend")
 
-        # instance_id
-        self.instance_id = os.environ.get('AWS_INSTANCE_ID', None)
-        # ami_id & ami_version
-
         # EC2-related info is not needed if an instance is already created
         if self.instance_id is None:
-            self.ami_id = os.environ.get('AWS_AMI_ID')
-            self.ami_version = os.environ.get('AWS_AMI_VERSION')
-            if not self.ami_id and not self.ami_version:
-                logging.error("Either `AWS_AMI_ID` or `AWS_AMI_VERSION` should be presented as env var!")
-                raise RuntimeError("Either `AWS_AMI_ID` or `AWS_AMI_VERSION` should be presented as env var!")
             if not self.ami_id:
+                if not self.ami_version:
+                    logging.error("Either `AWS_AMI_ID` or `AWS_AMI_VERSION` should be presented as env var!")
+                    raise RuntimeError("Either `AWS_AMI_ID` or `AWS_AMI_VERSION` should be presented as env var!")
                 self.ami_id = self.get_image_id()
-            if self.ami_id == '':
+            if not self.ami_id:
                 logging.error('AWS_AMI_ID must not be blank. You should inform either AWS_AMI_ID or provide a valid AWS_AMI_VERSION')
                 raise RuntimeError('AWS_AMI_ID must not be blank. You should inform either AWS_AMI_ID or provide a valid AWS_AMI_VERSION')
 
-            # Optional: key_name
-            self.key_name = os.environ.get('AWS_KEY_NAME')
+            if not self.iam_profile:
+                logging.error("aws:environment variable `AWS_IAM_PROFILE` needs to be present!")
+                raise RuntimeError("aws:environment variable `AWS_IAM_PROFILE` needs to be present!")
+            if not self.security_group_id:
+                logging.error("aws:environment variable `AWS_SECURITY_GROUP_ID` needs to be present!")
+                raise RuntimeError("aws:environment variable `AWS_SECURITY_GROUP_ID` needs to be present!")
+            if not self.subnet_id:
+                logging.error("aws:environment variable `AWS_SUBNET_ID` needs to be present!")
+                raise RuntimeError("aws:environment variable `AWS_SUBNET_ID` needs to be present!")
 
-            envs = [
-                'AWS_IAM_PROFILE',
-                'AWS_SECURITY_GROUP_ID',
-                'AWS_SUBNET_ID'
-            ]
-            for env in envs:
-                if env not in os.environ:
-                    logging.error("aws:environment variable `%s` needs to be present!", env)
-                    raise RuntimeError("aws:environment variable `%s` needs to be present!", env)
-            self.iam_profile = os.environ.get('AWS_IAM_PROFILE')
-            self.instance_type = os.environ.get('AWS_INSTANCE_TYPE', 't2.micro')
-            self.security_group_id = os.environ.get('AWS_SECURITY_GROUP_ID')
-            self.subnet_id = os.environ.get('AWS_SUBNET_ID')
-            self.keep_ec2_instance = (os.environ.get('AWS_KEEP_EC2_INSTANCES', 'false').lower() == 'true')
-
-        # s3_keyprefix
-        self.s3_keyprefix = os.environ.get('AWS_S3_KEYPREFIX', 'ssm')
-
-        # check mandatory env vars
-        envs = [
-            'AWS_S3_BUCKET',
-        ]
-        for env in envs:
-            if env not in os.environ:
-                logging.error("aws:environment variable `%s` needs to be present!", env)
-                raise RuntimeError("aws:environment variable `%s` needs to be present!", env)
-
-        self.s3_bucket_name = os.environ.get('AWS_S3_BUCKET')
+        if not self.s3_bucket_name:
+            logging.error("aws:environment variable `AWS_S3_BUCKET` needs to be present!")
+            raise RuntimeError("aws:environment variable `AWS_S3_BUCKET` needs to be present!")
 
         logging.info(f"aws:aws__repr__:{self.__repr__()}")
 
@@ -166,29 +146,18 @@ class AwsBackend(VhtBackend):
 
             This is a mandatory VHT backend method.
         """
-        if self.key_name is None or self.key_name == '':
-            self.instance_id = self.create_ec2_instance(
-                ImageId=self.ami_id,
-                InstanceType=self.instance_type,
-                MaxCount=1,
-                MinCount=1,
-                SecurityGroupIds=[self.security_group_id],
-                SubnetId=self.subnet_id,
-                TagSpecifications=[{'ResourceType': 'instance','Tags': [{'Key': 'VHT_CLI','Value': 'true',}]}],
-                IamInstanceProfile={'Name': self.iam_profile}
-            )
-        else:
-            self.instance_id = self.create_ec2_instance(
-                ImageId=self.ami_id,
-                InstanceType=self.instance_type,
-                MaxCount=1,
-                MinCount=1,
-                KeyName=self.key_name,
-                SecurityGroupIds=[self.security_group_id],
-                SubnetId=self.subnet_id,
-                TagSpecifications=[{'ResourceType': 'instance','Tags': [{'Key': 'VHT_CLI','Value': 'true',}]}],
-                IamInstanceProfile={'Name': self.iam_profile}
-            )
+        self._init()
+        self.instance_id = self.create_ec2_instance(
+            ImageId=self.ami_id,
+            InstanceType=self.instance_type,
+            MaxCount=1,
+            MinCount=1,
+            KeyName=self.key_name,
+            SecurityGroupIds=[self.security_group_id],
+            SubnetId=self.subnet_id,
+            TagSpecifications=[{'ResourceType': 'instance','Tags': [{'Key': 'VHT_CLI','Value': 'true',}]}],
+            IamInstanceProfile={'Name': self.iam_profile}
+        )
 
         return self.instance_id
 
@@ -218,6 +187,8 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.run_instances
         """
+        kwargs = {k: v for k, v in kwargs if v}
+
         logging.debug('aws:DryRun=True to test for permission check')
         logging.debug(f"aws:create_ec2_instance:kwargs:{kwargs}")
 
@@ -228,7 +199,6 @@ class AwsBackend(VhtBackend):
                 raise
 
         logging.info('aws:Creating EC2 instance...')
-        logging.debug(f"aws:kwargs={kwargs}")
         response = self._ec2_client.run_instances(**kwargs)
         logging.debug(response)
 
@@ -255,7 +225,7 @@ class AwsBackend(VhtBackend):
 
         This is a mandatory VHT backend method.
         """
-
+        self._init()
         logging.info(f"aws:Delete S3 Object from S3 Bucket {self.s3_bucket_name}, Key {key}")
         response = self._s3_client.delete_object(
             Bucket=self.s3_bucket_name,
@@ -280,7 +250,7 @@ class AwsBackend(VhtBackend):
 
         This is a mandatory VHT backend method.
         """
-
+        self._init()
         logging.info("aws:Download S3 File")
         try:
             logging.info(f"Downloading S3 file from bucket `{self.s3_bucket_name}`, key `{key}`, filename `{filename}`")
@@ -326,14 +296,7 @@ class AwsBackend(VhtBackend):
         self.ami_id = response['Images'][0]['ImageId']
         return self.ami_id
 
-    def get_instance_id(self):
-        """
-        Return EC2 Instance ID.
-        This is a mandatory VHT backend method.
-        """
-        return self.instance_id
-
-    def get_instance_state(self, instance_id: str = None):
+    def get_instance_state(self):
         """
         Get EC2 Instance State
 
@@ -347,9 +310,11 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.describe_instances
         """
+        self._init()
+
         response = self._ec2_client.describe_instances(
             InstanceIds=[
-                instance_id or self.instance_id,
+                self.instance_id,
             ],
         )
 
@@ -377,6 +342,7 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#object
         """
+        self._init()
         content = ''
         try:
             content = self._s3_resource.Object(self.s3_bucket_name, key).get()['Body'].read().decode('utf-8')
@@ -512,6 +478,7 @@ class AwsBackend(VhtBackend):
         return response['CommandInvocations'][0]['StandardErrorUrl']
 
     def create_or_start_instance(self):
+        self._init()
         if self.instance_id:
             state = self.get_instance_state()
             if state == "running":
@@ -528,6 +495,7 @@ class AwsBackend(VhtBackend):
         return VhtBackend.INSTANCE_CREATED
 
     def prepare_instance(self):
+        self._init()
         commands = [
             f"runuser -l ubuntu -c 'cat ~/.bashrc | grep export > {self.AMI_WORKDIR}/vars'",
             f"runuser -l ubuntu -c 'rm -rf {self.AMI_WORKDIR}/workspace'",
@@ -540,10 +508,12 @@ class AwsBackend(VhtBackend):
         self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
 
     def run_commands(self, cmds: List[str]):
+        self._init()
         commands = [f"runuser -l ubuntu -c 'source {self.AMI_WORKDIR}/vars && {cmd}'" for cmd in cmds]
         self.send_remote_command_batch(commands, working_dir=f"{self.AMI_WORKDIR}/workspace")
 
     def upload_workspace(self, filename):
+        self._init()
         if isinstance(filename, str):
             filename = Path(filename)
         try:
@@ -558,6 +528,7 @@ class AwsBackend(VhtBackend):
             self.delete_file_from_cloud(filename.name)
 
     def download_workspace(self, filename):
+        self._init()
         if isinstance(filename, str):
             filename = Path(filename)
         try:
@@ -586,7 +557,7 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.upload_file
         """
-
+        self._init()
         logging.info(f"aws:Upload File {filename} to S3 Bucket {self.s3_bucket_name}, Key {key}")
         self._s3_resource.meta.client.upload_file(filename, self.s3_bucket_name, key)
 
@@ -609,6 +580,7 @@ class AwsBackend(VhtBackend):
 
         This is a mandatory VHT backend method.
         """
+        self._init()
         logging.info(f"vht: command_list = {command_list}")
         response = self.send_ssm_shell_command(
             command_list=command_list,
@@ -642,6 +614,7 @@ class AwsBackend(VhtBackend):
 
         This is a mandatory VHT backend method.
         """
+        self._init()
         logging.info(f"vht: command_list = {command_list}")
         all_responses = []
 
@@ -770,6 +743,7 @@ class AwsBackend(VhtBackend):
 
         This is a mandatory VHT backend method.
         """
+        self._init()
         logging.info(f"aws:Starting EC2 instance {self.instance_id}")
         response = self._ec2_client.start_instances(
             InstanceIds=[
@@ -793,6 +767,7 @@ class AwsBackend(VhtBackend):
 
         This is a mandatory VHT backend method.
         """
+        self._init()
         logging.info(f"aws:Stopping EC2 instance {self.instance_id}")
         response = self._ec2_client.stop_instances(
             InstanceIds=[
@@ -891,19 +866,10 @@ class AwsBackend(VhtBackend):
         )
 
     def cleanup_instance(self, state):
+        self._init()
         if state == VhtBackend.INSTANCE_RUNNING:
             pass
         elif (state == VhtBackend.INSTANCE_STARTED) or self.keep_ec2_instance:
-            self.stop_instance()
-        else:
-            self.terminate_instance()
-
-    def teardown(self):
-        """
-            Teardown
-        """
-        # if terminate_instance is True Terminate Otherwise Stop instance
-        if self.keep_ec2_instance:
             self.stop_instance()
         else:
             self.terminate_instance()
@@ -948,6 +914,7 @@ class AwsBackend(VhtBackend):
 
         This is a mandatory VHT backend method.
         """
+        self._init()
         logging.debug('aws:terminate_instance: DryRun=True to test for permission check')
         try:
             self._ec2_client.terminate_instances(
