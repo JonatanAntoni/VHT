@@ -526,12 +526,12 @@ class AwsBackend(VhtBackend):
             "apt update",
             "apt install awscli -y"
         ]
-        self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+        self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
 
     def run_commands(self, cmds: List[str]):
         self._init()
-        commands = [f"runuser -l ubuntu -c 'source {self.AMI_WORKDIR}/vars && {cmd}'" for cmd in cmds]
-        self.send_remote_command_batch(commands, working_dir=f"{self.AMI_WORKDIR}/workspace")
+        commands = [f"runuser -l ubuntu -c 'source {self.AMI_WORKDIR}/vars && pushd {self.AMI_WORKDIR}/workspace && {cmd}'" for cmd in cmds]
+        self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
 
     def upload_workspace(self, filename):
         self._init()
@@ -544,7 +544,7 @@ class AwsBackend(VhtBackend):
                 f"runuser -l ubuntu -c 'cd {self.AMI_WORKDIR}/workspace; tar xvf {self.AMI_WORKDIR}/{filename.name}'",
                 f"runuser -l ubuntu -c 'rm -f {self.AMI_WORKDIR}/{filename.name}'"
             ]
-            self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+            self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
         finally:
             self.delete_file_from_cloud(filename.name)
 
@@ -558,7 +558,7 @@ class AwsBackend(VhtBackend):
                 f"runuser -l ubuntu -c 'aws s3 cp {self.AMI_WORKDIR}/{filename.name} s3://{self.s3_bucket_name}/{filename.name}'",
                 f"runuser -l ubuntu -c 'rm -f {self.AMI_WORKDIR}/{filename.name}'"
             ]
-            self.send_remote_command_batch(commands, working_dir=AwsBackend.AMI_WORKDIR)
+            self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
             self.download_file_from_cloud(str(filename), filename.name)
         finally:
             self.delete_file_from_cloud(filename.name)
