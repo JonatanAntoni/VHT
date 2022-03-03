@@ -23,7 +23,7 @@ class LocalBackend(VhtBackend):
     def __init__(self):
         self.workdir = TemporaryDirectory(prefix="vhtwork-")
 
-    def create_or_start_instance(self, instance_id: str = None):
+    def create_or_start_instance(self):
         return VhtBackend.INSTANCE_RUNNING
 
     def cleanup_instance(self, state):

@@ -34,11 +34,8 @@ class VhtBackend:
         """
         raise NotImplementedError()
 
-    def create_or_start_instance(self, instance_id: str = None):
+    def create_or_start_instance(self):
         """Create or start a new machine instance
-
-        Args:
-            instance_id - Use the given instance
 
         Returns:
             INSTANCE_CREATED

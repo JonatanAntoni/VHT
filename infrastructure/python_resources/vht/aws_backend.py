@@ -9,7 +9,6 @@ import time
 from botocore.exceptions import ClientError
 from botocore.exceptions import WaiterError
 from pathlib import Path
-from textwrap import dedent
 
 from .backend import VhtBackend
 
@@ -38,17 +37,28 @@ class AwsBackend(VhtBackend):
     Some AWS-related info is expected as envs. See _setup.
     """
     def __init__(self):
+        self.ami_id: str = None
+        self.ami_version: str = None
+        self.iam_profile: str = None
+        self.instance_id: str = None
+        self.instance_type: str = None
+        self.key_name: str = None
+        self.s3_bucket_name: str = None
+        self.security_group_id: str = None
+        self.subnet_id: str = None
+        self.keep_ec2_instance: bool = None
+
         logging.info('aws:Creating EC2 client...')
-        self.ec2_client = boto3.client('ec2')
+        self._ec2_client = boto3.client('ec2')
 
         logging.info('aws:Creating SSM client...')
-        self.ssm_client = boto3.client('ssm')
+        self._ssm_client = boto3.client('ssm')
 
         logging.info('aws:Creating S3 client...')
-        self.s3_client = boto3.client('s3')
+        self._s3_client = boto3.client('s3')
 
         logging.info('aws:Creating S3 resource...')
-        self.s3_resource = boto3.resource('s3')
+        self._s3_resource = boto3.resource('s3')
 
         self._is_aws_credentials_present()
         self._setup()
@@ -57,7 +67,6 @@ class AwsBackend(VhtBackend):
         return (
             f"ami_id={self.ami_id},"
             f"ami_version={self.ami_version},"
-            f"workspace={self.workspace},"
             f"iam_profile={self.iam_profile},"
             f"instance_id={self.instance_id},"
             f"instance_type={self.instance_type},"
@@ -65,9 +74,7 @@ class AwsBackend(VhtBackend):
             f"s3_bucket_name={self.s3_bucket_name},"
             f"security_group_id={self.security_group_id},"
             f"subnet_id={self.subnet_id},"
-            f"vht_in_filename={self.vht_in_filename},"
-            f"vht_out_filename={self.vht_out_filename},"
-            f"terminate_ec2_instance={self.keep_ec2_instance}"
+            f"keep_ec2_instance={self.keep_ec2_instance}"
         )
 
     def _is_aws_credentials_present(self):
@@ -100,19 +107,6 @@ class AwsBackend(VhtBackend):
         """
         # Initializing None all VHT related variables
         logging.info("aws:setting up aws backend")
-        self.ami_id = None
-        self.ami_version = None
-        self.workspace = None
-        self.iam_profile = None
-        self.instance_id: str = None
-        self.instance_type = None
-        self.key_name = None
-        self.s3_bucket_name = None
-        self.security_group_id = None
-        self.subnet_id = None
-        self.keep_ec2_instance = None
-        self.vht_in_filename = 'vht.tar'
-        self.vht_out_filename = 'out.tar'
 
         # instance_id
         self.instance_id = os.environ.get('AWS_INSTANCE_ID', None)
@@ -161,10 +155,7 @@ class AwsBackend(VhtBackend):
                 logging.error("aws:environment variable `%s` needs to be present!", env)
                 raise RuntimeError("aws:environment variable `%s` needs to be present!", env)
 
-        self.workspace = os.environ.get('VHT_WORKSPACE', os.getcwd())
         self.s3_bucket_name = os.environ.get('AWS_S3_BUCKET')
-        self.vht_in = f"{self.workspace}/{self.vht_in_filename}"
-        self.vht_out = f"{self.workspace}/{self.vht_out_filename}"
 
         logging.info(f"aws:aws__repr__:{self.__repr__()}")
 
@@ -231,14 +222,14 @@ class AwsBackend(VhtBackend):
         logging.debug(f"aws:create_ec2_instance:kwargs:{kwargs}")
 
         try:
-            self.ec2_client.run_instances(**kwargs, DryRun=True)
+            self._ec2_client.run_instances(**kwargs, DryRun=True)
         except ClientError as e:
             if 'DryRunOperation' not in str(e):
                 raise
 
         logging.info('aws:Creating EC2 instance...')
         logging.debug(f"aws:kwargs={kwargs}")
-        response = self.ec2_client.run_instances(**kwargs)
+        response = self._ec2_client.run_instances(**kwargs)
         logging.debug(response)
 
         self.instance_id = response['Instances'][0]['InstanceId']
@@ -266,7 +257,7 @@ class AwsBackend(VhtBackend):
         """
 
         logging.info(f"aws:Delete S3 Object from S3 Bucket {self.s3_bucket_name}, Key {key}")
-        response = self.s3_client.delete_object(
+        response = self._s3_client.delete_object(
             Bucket=self.s3_bucket_name,
             Key=key
         )
@@ -293,7 +284,7 @@ class AwsBackend(VhtBackend):
         logging.info("aws:Download S3 File")
         try:
             logging.info(f"Downloading S3 file from bucket `{self.s3_bucket_name}`, key `{key}`, filename `{filename}`")
-            self.s3_client.download_file(self.s3_bucket_name, key, filename)
+            self._s3_client.download_file(self.s3_bucket_name, key, filename)
         except ClientError as e:
             if 'HeadObject operation: Not Found' in str(e):
                 print(f"Key '{key}' not found on S3 Bucket Name = '{self.s3_bucket_name}'")
@@ -320,7 +311,7 @@ class AwsBackend(VhtBackend):
         """
         assert self.ami_version is not None, \
             "The variable `ami_version` is not present"
-        response = self.ec2_client.describe_images(
+        response = self._ec2_client.describe_images(
             Filters=[
                 {
                     'Name': 'name',
@@ -356,7 +347,7 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.describe_instances
         """
-        response = self.ec2_client.describe_instances(
+        response = self._ec2_client.describe_instances(
             InstanceIds=[
                 instance_id or self.instance_id,
             ],
@@ -388,8 +379,8 @@ class AwsBackend(VhtBackend):
         """
         content = ''
         try:
-            content = self.s3_resource.Object(self.s3_bucket_name, key).get()['Body'].read().decode('utf-8')
-        except self.s3_client.exceptions.NoSuchKey:
+            content = self._s3_resource.Object(self.s3_bucket_name, key).get()['Body'].read().decode('utf-8')
+        except self._s3_client.exceptions.NoSuchKey:
             logging.info(f"aws:Key '{key}' not found on S3 bucket '{self.s3_bucket_name}'")
             return ''
 
@@ -431,7 +422,7 @@ class AwsBackend(VhtBackend):
         API Definition:
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ssm.html#SSM.Client.list_commands
         """
-        response = self.ssm_client.list_commands(
+        response = self._ssm_client.list_commands(
             CommandId=command_id
         )
 
@@ -460,7 +451,7 @@ class AwsBackend(VhtBackend):
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ssm.html#SSM.Client.get_command_invocation
         """
 
-        response = self.ssm_client.get_command_invocation(
+        response = self._ssm_client.get_command_invocation(
             CommandId=command_id,
             InstanceId=self.instance_id
         )
@@ -487,7 +478,7 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ssm.html#SSM.Client.list_command_invocations
         """
-        response = self.ssm_client.list_command_invocations(
+        response = self._ssm_client.list_command_invocations(
             CommandId=command_id,
             InstanceId=self.instance_id
         )
@@ -513,38 +504,14 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ssm.html#SSM.Client.list_command_invocations
         """
-        response = self.ssm_client.list_command_invocations(
+        response = self._ssm_client.list_command_invocations(
             CommandId=command_id,
             InstanceId=self.instance_id
         )
         logging.debug(f"aws:get_ssm_command_id_stderr_url:{response}")
         return response['CommandInvocations'][0]['StandardErrorUrl']
 
-    def get_process_vht_commands(self):
-        """
-            VHT commands to be executed on a remote EC2 instance.
-
-            This is a mandatory VHT backend method.
-        """
-        return [
-            "runuser -l ubuntu -c 'cat ~/.bashrc | grep export > vars'",
-            "rm -rf /home/ubuntu/vhtagent",
-            "rm -rf /home/ubuntu/vhtwork",
-            "runuser -l ubuntu -c 'mkdir vhtagent'",
-            "runuser -l ubuntu -c 'mkdir vhtwork'",
-            "runuser -l ubuntu -c 'mkdir -p /home/ubuntu/packs/.Web'",
-            "runuser -l ubuntu -c 'cd /home/ubuntu/vhtagent && wget https://raw.githubusercontent.com/ARM-software/VHT-AMI/master/agent/process_vht.py'",
-            "runuser -l ubuntu -c 'wget -N https://www.keil.com/pack/index.pidx -O /home/ubuntu/packs/.Web/index.pidx'",
-            "apt update",
-            "apt install awscli -y",
-            f"runuser -l ubuntu -c 'aws s3 cp s3://{self.s3_bucket_name}/{self.vht_in_filename} /home/ubuntu/vhtwork/{self.vht_in_filename}'",
-            "runuser -l ubuntu -c 'source vars && python3 /home/ubuntu/vhtagent/process_vht.py'",
-            f"runuser -l ubuntu -c 'aws s3 cp /home/ubuntu/vhtwork/{self.vht_out_filename} s3://{self.s3_bucket_name}/{self.vht_out_filename}'"
-        ]
-
-    def create_or_start_instance(self, instance_id: str = None):
-        self.instance_id = instance_id or self.instance_id
-
+    def create_or_start_instance(self):
         if self.instance_id:
             state = self.get_instance_state()
             if state == "running":
@@ -575,24 +542,6 @@ class AwsBackend(VhtBackend):
     def run_commands(self, cmds: List[str]):
         commands = [f"runuser -l ubuntu -c 'source {self.AMI_WORKDIR}/vars && {cmd}'" for cmd in cmds]
         self.send_remote_command_batch(commands, working_dir=f"{self.AMI_WORKDIR}/workspace")
-
-    def run(self, delete_output_file_from_cloud=True):
-        self.create_or_start_instance()
-
-        self.upload_file_to_cloud(self.vht_in, self.vht_in_filename)
-        self.send_remote_command_batch(self.get_process_vht_commands(), working_dir=AwsBackend.AMI_WORKDIR)
-
-        logging.info("aws:Download S3 File to the GitHub Runner...")
-        self.download_file_from_cloud(
-            filename=self.vht_out,
-            key=self.vht_out_filename
-        )
-
-        if delete_output_file_from_cloud:
-            logging.info("aws:Delete S3 Out.tar object from the S3 Bucket...")
-            self.delete_file_from_cloud(key=self.vht_out_filename)
-
-        self.teardown()
 
     def upload_workspace(self, filename):
         if isinstance(filename, str):
@@ -639,7 +588,7 @@ class AwsBackend(VhtBackend):
         """
 
         logging.info(f"aws:Upload File {filename} to S3 Bucket {self.s3_bucket_name}, Key {key}")
-        self.s3_resource.meta.client.upload_file(filename, self.s3_bucket_name, key)
+        self._s3_resource.meta.client.upload_file(filename, self.s3_bucket_name, key)
 
     def send_remote_command(self, command_list, working_dir, fail_if_unsuccess = True):
         """
@@ -752,8 +701,10 @@ class AwsBackend(VhtBackend):
         stderr_key = ''
         stderr_str = ''
 
+        logging.info(f"aws:send_ssm_shell_command:{working_dir}:{command_list}")
+
         try:
-            response = self.ssm_client.send_command(
+            response = self._ssm_client.send_command(
                 InstanceIds=[
                     self.instance_id
                 ],
@@ -819,10 +770,8 @@ class AwsBackend(VhtBackend):
 
         This is a mandatory VHT backend method.
         """
-        assert self.instance_id not in ('', None), "instance_id should be provided!"
-
         logging.info(f"aws:Starting EC2 instance {self.instance_id}")
-        response = self.ec2_client.start_instances(
+        response = self._ec2_client.start_instances(
             InstanceIds=[
                 self.instance_id,
             ]
@@ -845,7 +794,7 @@ class AwsBackend(VhtBackend):
         This is a mandatory VHT backend method.
         """
         logging.info(f"aws:Stopping EC2 instance {self.instance_id}")
-        response = self.ec2_client.stop_instances(
+        response = self._ec2_client.stop_instances(
             InstanceIds=[
                 self.instance_id
             ]
@@ -865,7 +814,7 @@ class AwsBackend(VhtBackend):
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Waiter.InstanceStatusOk
         """
         logging.info(f"aws:Waiting until EC2 instance id {self.instance_id} Status Ok...")
-        waiter = self.ec2_client.get_waiter('instance_status_ok')
+        waiter = self._ec2_client.get_waiter('instance_status_ok')
         waiter.wait(
             InstanceIds=[
                 self.instance_id
@@ -882,7 +831,7 @@ class AwsBackend(VhtBackend):
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Waiter.InstanceRunning
         """
         logging.info(f"aws:Waiting until EC2 instance id {self.instance_id} is running...")
-        waiter = self.ec2_client.get_waiter('instance_running')
+        waiter = self._ec2_client.get_waiter('instance_running')
         waiter.wait(
             InstanceIds=[
                 self.instance_id
@@ -931,7 +880,7 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Waiter.ObjectExists
         """
-        waiter = self.s3_client.get_waiter('object_exists')
+        waiter = self._s3_client.get_waiter('object_exists')
         waiter.wait(
             Bucket=self.s3_bucket_name,
             Key=key,
@@ -974,7 +923,7 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ssm.html#SSM.Waiter.CommandExecuted
         """
-        waiter = self.ssm_client.get_waiter('command_executed')
+        waiter = self._ssm_client.get_waiter('command_executed')
         try:
             waiter.wait(
                 CommandId=command_id,
@@ -1001,7 +950,7 @@ class AwsBackend(VhtBackend):
         """
         logging.debug('aws:terminate_instance: DryRun=True to test for permission check')
         try:
-            self.ec2_client.terminate_instances(
+            self._ec2_client.terminate_instances(
                 InstanceIds=[
                     self.instance_id
                 ],
@@ -1012,7 +961,7 @@ class AwsBackend(VhtBackend):
                 raise
 
         logging.info('aws:Terminating EC2 instance...')
-        response = self.ec2_client.terminate_instances(
+        response = self._ec2_client.terminate_instances(
             InstanceIds=[
                 self.instance_id
             ]

@@ -188,14 +188,14 @@ class TestVhtAws(TestCase):
         aws_client = self.get_vht_aws_instance()
 
         # mocking methods
-        aws_client.ec2_client.run_instances = Mock()
+        aws_client._ec2_client.run_instances = Mock()
         aws_client.wait_ec2_status_ok = Mock()
         aws_client.wait_ec2_running = Mock()
 
         # setting return values for the mocked methods
         aws_client.wait_ec2_status_ok.return_value = None
         aws_client.wait_ec2_running.return_value = None
-        aws_client.ec2_client.run_instances.return_value = {
+        aws_client._ec2_client.run_instances.return_value = {
             'Groups': [],
             'Instances': [{
                 'AmiLaunchIndex': 0,
@@ -321,7 +321,7 @@ class TestVhtAws(TestCase):
         instance_id = aws_client.create_instance()
 
         # asserting values
-        assert aws_client.ec2_client.run_instances.called
+        assert aws_client._ec2_client.run_instances.called
         assert aws_client.wait_ec2_status_ok.called
         assert aws_client.wait_ec2_running.called
         assert instance_id == 'i-064a8d261aea65d9e'
@@ -330,32 +330,32 @@ class TestVhtAws(TestCase):
         aws_client = self.get_vht_aws_instance()
 
         # mocking methods
-        aws_client.s3_client.delete_object = Mock()
+        aws_client._s3_client.delete_object = Mock()
 
         # setting return values for the mocked methods
-        aws_client.s3_client.delete_object.return_value = None
+        aws_client._s3_client.delete_object.return_value = None
 
         # running the actual method
         response = aws_client.delete_file_from_cloud('key')
 
         # asserting values
-        assert aws_client.s3_client.delete_object.called
+        assert aws_client._s3_client.delete_object.called
         assert response is None
 
     def test_download_file_from_cloud(self):
         aws_client = self.get_vht_aws_instance()
 
         # mocking methods
-        aws_client.s3_client.download_file = Mock()
+        aws_client._s3_client.download_file = Mock()
 
         # setting return values for the mocked methods
-        aws_client.s3_client.download_file.return_value = None
+        aws_client._s3_client.download_file.return_value = None
 
         # running the actual method
         response = aws_client.download_file_from_cloud('key', 'filename')
 
         # asserting values
-        assert aws_client.s3_client.download_file.called
+        assert aws_client._s3_client.download_file.called
         assert response is None
 
     def test_get_image_id(self):
@@ -363,10 +363,10 @@ class TestVhtAws(TestCase):
         aws_client.ami_version = self.data['AWS_AMI_VERSION']
 
         # mocking methods
-        aws_client.ec2_client.describe_images = Mock()
+        aws_client._ec2_client.describe_images = Mock()
 
         # setting return values for the mocked methods
-        aws_client.ec2_client.describe_images.return_value = {
+        aws_client._ec2_client.describe_images.return_value = {
             'Images': [{
                 'Architecture': 'x86_64',
                 'CreationDate': '2021-10-15T07:25:55.000Z',
@@ -421,17 +421,17 @@ class TestVhtAws(TestCase):
         response = aws_client.get_image_id()
 
         # asserting values
-        assert aws_client.ec2_client.describe_images.called
+        assert aws_client._ec2_client.describe_images.called
         assert response == 'ami-0c5eeabe11f3a2685'
 
     def test_get_instance_state(self):
         aws_client = self.get_vht_aws_instance()
 
         # mocking methods
-        aws_client.ec2_client.describe_instances = Mock()
+        aws_client._ec2_client.describe_instances = Mock()
 
         # setting return values for the mocked methods
-        aws_client.ec2_client.describe_instances.return_value = {
+        aws_client._ec2_client.describe_instances.return_value = {
             'Reservations': [{
                 'Groups': [],
                 'Instances': [{
@@ -572,7 +572,7 @@ class TestVhtAws(TestCase):
         response = aws_client.get_instance_state()
 
         # asserting values
-        assert aws_client.ec2_client.describe_instances.called
+        assert aws_client._ec2_client.describe_instances.called
         assert response == 'running'
 
     @skip('Find out how to mock s3_resource.Object.get')
@@ -581,7 +581,7 @@ class TestVhtAws(TestCase):
 
         # mocking methods
         # setting return values for the mocked methods
-        aws_client.s3_resource.Object('AWS_S3_BUCKET', 'key').get = Mock(
+        aws_client._s3_resource.Object('AWS_S3_BUCKET', 'key').get = Mock(
             return_value="drwxr-xr-x  13 root root  4096 Apr 30  2021 var"
         )
 
@@ -589,7 +589,7 @@ class TestVhtAws(TestCase):
         response = aws_client.get_s3_file_content('key')
 
         # asserting values
-        assert aws_client.s3_resource.Object.called
+        assert aws_client._s3_resource.Object.called
         assert response == "drwxr-xr-x  13 root root  4096 Apr 30  2021 var"
 
     def test_get_s3_ssm_command_id_key(self):
@@ -608,10 +608,10 @@ class TestVhtAws(TestCase):
         aws_client = self.get_vht_aws_instance()
 
         # mocking methods
-        aws_client.ssm_client.list_commands = Mock()
+        aws_client._ssm_client.list_commands = Mock()
 
         # setting return values for the mocked methods
-        aws_client.ssm_client.list_commands.return_value = {
+        aws_client._ssm_client.list_commands.return_value = {
             'Commands': [{
                 'CommandId': '8f181e5d-8fec-45fa-9bfa-812e76df650c',
                 'DocumentName': 'AWS-RunShellScript',
@@ -669,17 +669,17 @@ class TestVhtAws(TestCase):
         )
 
         # asserting values
-        assert aws_client.ssm_client.list_commands.called
+        assert aws_client._ssm_client.list_commands.called
         assert response == 'Success'
 
     def test_get_ssm_command_id_status_details(self):
         aws_client = self.get_vht_aws_instance()
 
         # mocking methods
-        aws_client.ssm_client.get_command_invocation = Mock()
+        aws_client._ssm_client.get_command_invocation = Mock()
 
         # setting return values for the mocked methods
-        aws_client.ssm_client.get_command_invocation.return_value = {
+        aws_client._ssm_client.get_command_invocation.return_value = {
             'CommandId': 'da584039-585c-4fd7-b30f-fad58c42c881',
             'InstanceId': 'i-000f2435623398464',
             'Comment': '',
@@ -721,17 +721,17 @@ class TestVhtAws(TestCase):
         )
 
         # asserting values
-        assert aws_client.ssm_client.get_command_invocation.called
+        assert aws_client._ssm_client.get_command_invocation.called
         assert response == 'Success'
 
     def test_get_ssm_command_id_stdout_url(self):
         aws_client = self.get_vht_aws_instance()
 
         # mocking methods
-        aws_client.ssm_client.list_command_invocations = Mock()
+        aws_client._ssm_client.list_command_invocations = Mock()
 
         # setting return values for the mocked methods
-        aws_client.ssm_client.list_command_invocations.return_value = {
+        aws_client._ssm_client.list_command_invocations.return_value = {
             'CommandInvocations': [{
                 'CommandId': 'da584039-585c-4fd7-b30f-fad58c42c881',
                 'InstanceId': 'i-000f2435623398464',
@@ -777,17 +777,17 @@ class TestVhtAws(TestCase):
         )
 
         # asserting values
-        assert aws_client.ssm_client.list_command_invocations.called
+        assert aws_client._ssm_client.list_command_invocations.called
         assert response == 'https://s3.eu-west-1.amazonaws.com/gh-orta-vht/ssm/da584039-585c-4fd7-b30f-fad58c42c881/i-000f2435623398464/awsrunShellScript/0.awsrunShellScript/stdout'
 
     def test_get_ssm_command_id_stderr_url(self):
         aws_client = self.get_vht_aws_instance()
 
         # mocking methods
-        aws_client.ssm_client.list_command_invocations = Mock()
+        aws_client._ssm_client.list_command_invocations = Mock()
 
         # setting return values for the mocked methods
-        aws_client.ssm_client.list_command_invocations.return_value = {
+        aws_client._ssm_client.list_command_invocations.return_value = {
             'CommandInvocations': [{
                 'CommandId': 'da584039-585c-4fd7-b30f-fad58c42c881',
                 'InstanceId': 'i-000f2435623398464',
@@ -833,7 +833,7 @@ class TestVhtAws(TestCase):
         )
 
         # asserting values
-        assert aws_client.ssm_client.list_command_invocations.called
+        assert aws_client._ssm_client.list_command_invocations.called
         assert response == 'https://s3.eu-west-1.amazonaws.com/gh-orta-vht/ssm/da584039-585c-4fd7-b30f-fad58c42c881/i-000f2435623398464/awsrunShellScript/0.awsrunShellScript/stderr'
 
     @skip('TODO')

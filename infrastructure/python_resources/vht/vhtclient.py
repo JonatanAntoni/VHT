@@ -33,26 +33,35 @@ class VHTClient:
         """Create a new VHT instance"""
         return self.backend.create_instance()
 
-    def delete_file_from_cloud(self, key: str) -> str:
-        return self.backend.delete_file_from_cloud(key)
+    def start_instance(self):
+        return self.backend.start_instance()
+
+    def stop_instance(self):
+        return self.backend.stop_instance()
+
+    def terminate_instance(self):
+        return self.backend.terminate_instance()
+
+    def get_instance_state(self):
+        return self.backend.get_instance_state()
+
+    def upload_file_to_cloud(self, filename: str, key: str):
+        return self.backend.upload_file_to_cloud(filename, key)
 
     def download_file_from_cloud(self, filename, key):
         return self.backend.download_file_from_cloud(filename, key)
 
-    def get_image_id(self):
-        return self.backend.get_image_id()
+    def delete_file_from_cloud(self, key: str) -> str:
+        return self.backend.delete_file_from_cloud(key)
 
-    def get_instance_state(self, instance_id: str):
-        return self.backend.get_instance_state(instance_id)
-
-    def run(self, workdir: str = os.getcwd(), instance_id: str = None):
+    def run(self, workdir: str = os.getcwd()):
         """Run the VHT job in the given WORKDIR"""
         vhtin = None
         vhtout = None
         instance_state = VhtBackend.INSTANCE_INVALID
         try:
             logging.info("Creating/staring instance...")
-            instance_state = self.backend.create_or_start_instance(instance_id)
+            instance_state = self.backend.create_or_start_instance()
 
             logging.info("Preparing instance...")
             self.backend.prepare_instance()
@@ -66,7 +75,8 @@ class VHTClient:
             self.backend.upload_workspace(vhtin.name)
 
             logging.info("Executing...")
-            cmds = ["pip install -r requirements.txt",
+            cmds = ["pwd",
+                    "pip install -r requirements.txt",
                     "python build.py cbuild vht"]
 
             self.backend.run_commands(cmds)
@@ -83,29 +93,3 @@ class VHTClient:
             if vhtout:
                 os.remove(vhtout.name)
             self.backend.cleanup_instance(instance_state)
-
-    def send_remote_command(self, command_list, working_dir, fail_if_unsuccess=True):
-        return self.backend.send_remote_command(command_list=command_list,
-                                                working_dir=working_dir,
-                                                fail_if_unsuccess=fail_if_unsuccess)
-
-    def send_remote_command_batch(self, command_list, working_dir, fail_if_unsuccess=True):
-        return self.backend.send_remote_command_batch(
-                                                command_list=command_list,
-                                                working_dir=working_dir,
-                                                fail_if_unsuccess=fail_if_unsuccess)
-
-    def start_instance(self):
-        return self.backend.start_instance()
-
-    def stop_instance(self):
-        return self.backend.stop_instance()
-
-    def terminate_instance(self):
-        return self.backend.terminate_instance()
-
-    def teardown(self):
-        return self.backend.teardown()
-
-    def upload_file_to_cloud(self, filename, key):
-        return self.backend.upload_file_to_cloud(filename, key)
