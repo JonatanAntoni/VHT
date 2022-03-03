@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import sys
 
 from argparse import ArgumentParser, SUPPRESS, Namespace
 from gettext import gettext as _
@@ -35,7 +36,14 @@ class VhtCli:
         func = VHTClient.__dict__[args.subcmd.replace('-', '_')]
         params = signature(func).parameters
         func_args = [vars(args)[param.replace('-', '_')] for param in islice(params.keys(), 1, None)]
-        func(vht_client, *func_args)
+        try:
+            func(vht_client, *func_args)
+        except RuntimeError as e:
+            if e.__cause__:
+                logging.error(e.__cause__)
+            if str(e):
+                logging.error(e)
+            sys.exit(1)
 
     @staticmethod
     def _parser() -> ArgumentParser:
