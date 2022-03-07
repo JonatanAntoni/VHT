@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import List
+from typing import List, Union
 
 import boto3
 import logging
@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from botocore.exceptions import WaiterError
 from pathlib import Path
 
-from .backend import VhtBackend
+from .backend import VhtBackend, VhtBackendState
 
 
 class AwsBackend(VhtBackend):
@@ -498,42 +498,45 @@ class AwsBackend(VhtBackend):
         logging.debug(f"aws:get_ssm_command_id_stderr_url:{response}")
         return response['CommandInvocations'][0]['StandardErrorUrl']
 
-    def create_or_start_instance(self):
+    def create_or_start_instance(self) -> VhtBackendState:
         self._init()
         if self.instance_id:
             state = self.get_instance_state()
             if state == "running":
                 logging.info(f"aws:EC2 Instance {self.instance_id} already running!")
-                return VhtBackend.INSTANCE_RUNNING
+                return VhtBackendState.RUNNING
             elif state == "stopped":
                 logging.info(f"aws:EC2 Instance {self.instance_id} provided!")
                 self.start_instance()
-                return VhtBackend.INSTANCE_STARTED
+                return VhtBackendState.STARTED
             else:
                 logging.warning(f"aws:EC2 Instance {self.instance_id} cannot be reused from state '{state}'!")
 
         self.create_instance()
-        return VhtBackend.INSTANCE_CREATED
+        return VhtBackendState.CREATED
 
-    def prepare_instance(self):
+    def prepare(self) -> VhtBackendState:
         self._init()
-        commands = [
-            f"runuser -l ubuntu -c 'cat ~/.bashrc | grep export > {self.AMI_WORKDIR}/vars'",
-            f"runuser -l ubuntu -c 'rm -rf {self.AMI_WORKDIR}/workspace'",
-            f"runuser -l ubuntu -c 'mkdir -p {self.AMI_WORKDIR}/workspace'",
-            f"runuser -l ubuntu -c 'mkdir -p {self.AMI_WORKDIR}/packs/.Web'",
-            f"runuser -l ubuntu -c 'wget -N https://www.keil.com/pack/index.pidx -O {self.AMI_WORKDIR}/packs/.Web/index.pidx'",
-            "apt update",
-            "apt install awscli -y"
-        ]
-        self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
+        state = self.create_or_start_instance()
+        if state == VhtBackendState.CREATED:
+            commands = [
+                f"runuser -l ubuntu -c 'cat ~/.bashrc | grep export > {self.AMI_WORKDIR}/vars'",
+                f"runuser -l ubuntu -c 'rm -rf {self.AMI_WORKDIR}/workspace'",
+                f"runuser -l ubuntu -c 'mkdir -p {self.AMI_WORKDIR}/workspace'",
+                f"runuser -l ubuntu -c 'mkdir -p {self.AMI_WORKDIR}/packs/.Web'",
+                f"runuser -l ubuntu -c 'wget -N https://www.keil.com/pack/index.pidx -O {self.AMI_WORKDIR}/packs/.Web/index.pidx'",
+                "apt update",
+                "apt install awscli -y"
+            ]
+            self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
+        return state
 
     def run_commands(self, cmds: List[str]):
         self._init()
         commands = [f"runuser -l ubuntu -c 'source {self.AMI_WORKDIR}/vars && pushd {self.AMI_WORKDIR}/workspace && {cmd}'" for cmd in cmds]
         self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
 
-    def upload_workspace(self, filename):
+    def upload_workspace(self, filename: Union[str, Path]):
         self._init()
         if isinstance(filename, str):
             filename = Path(filename)
@@ -548,7 +551,7 @@ class AwsBackend(VhtBackend):
         finally:
             self.delete_file_from_cloud(filename.name)
 
-    def download_workspace(self, filename):
+    def download_workspace(self, filename: Union[str, Path]):
         self._init()
         if isinstance(filename, str):
             filename = Path(filename)
@@ -906,7 +909,7 @@ class AwsBackend(VhtBackend):
         except WaiterError as e:
             raise RuntimeError from e
 
-    def cleanup_instance(self, state):
+    def cleanup(self, state):
         self._init()
         if state == VhtBackend.INSTANCE_RUNNING:
             pass

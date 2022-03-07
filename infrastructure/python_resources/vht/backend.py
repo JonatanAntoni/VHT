@@ -1,15 +1,20 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
-from typing import Dict, Type, List
+
+from enum import Enum
+from pathlib import Path
+from typing import Dict, Type, List, Union
+
+
+class VhtBackendState(Enum):
+    INVALID = 0
+    CREATED = 1
+    STARTED = 2
+    RUNNING = 3
 
 
 class VhtBackend:
-    INSTANCE_INVALID = 0
-    INSTANCE_CREATED = 1
-    INSTANCE_STARTED = 2
-    INSTANCE_RUNNING = 3
-
     @staticmethod
     def find_implementations() -> Dict[str, Type[VhtBackend]]:
         return {cls.name(): cls for cls in VhtBackend.__subclasses__()}
@@ -34,31 +39,33 @@ class VhtBackend:
         """
         raise NotImplementedError()
 
-    def create_or_start_instance(self):
-        """Create or start a new machine instance
+    def prepare(self) -> VhtBackendState:
+        """Runs required commands to prepare the backend for VHT workload.
 
         Returns:
-            INSTANCE_CREATED
-            INSTANCE_STARTED
-            INSTANCE_RUNNING
-        """
-        raise NotImplementedError()
-
-    def cleanup_instance(self, state):
-        """Cleanup the used instance.
-
-        Params:
-            state - The instance state returned by create_or_start_instance
-        """
-        raise NotImplementedError()
-
-    def prepare_instance(self):
-        """Runs required commands to prepare the instance for VHT workload.
+            The BackendState the backend was is before.
          """
         raise NotImplementedError()
 
-    def upload_workspace(self, tarball):
+    def cleanup(self, state: VhtBackendState):
+        """Cleanup the backend.
+        The backend is brought back into state before call to prepare.
+
+        Params:
+            state - The state returned by prepare
+        """
+        raise NotImplementedError()
+
+    def upload_workspace(self, tarball: Union[str, Path]):
         """Upload the workspace content from the given tarball.
+
+        Params:
+            tarball - The archived workspace.
+        """
+        raise NotImplementedError()
+
+    def download_workspace(self, tarball: Union[str, Path]):
+        """Download the workspace content into given tarball.
 
         Params:
             tarball - The archived workspace.
@@ -73,10 +80,3 @@ class VhtBackend:
         """
         raise NotImplementedError()
 
-    def download_workspace(self, tarball):
-        """Download the workspace content into given tarball.
-
-        Params:
-            tarball - The archived workspace.
-        """
-        raise NotImplementedError()

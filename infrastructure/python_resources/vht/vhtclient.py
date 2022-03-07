@@ -7,7 +7,7 @@ import tarfile
 from tempfile import NamedTemporaryFile
 from typing import List
 
-from .backend import VhtBackend
+from .backend import VhtBackend, VhtBackendState
 
 
 class VHTClient:
@@ -54,17 +54,20 @@ class VHTClient:
     def delete_file_from_cloud(self, key: str) -> str:
         return self.backend.delete_file_from_cloud(key)
 
+    def prepare(self):
+        return self.backend.prepare()
+
+    def cleanup(self, state: VhtBackendState = VhtBackendState.CREATED):
+        return self.backend.cleanup(state)
+
     def run(self, workdir: str = os.getcwd()):
         """Run the VHT job in the given WORKDIR"""
         vhtin = None
         vhtout = None
-        instance_state = VhtBackend.INSTANCE_INVALID
+        backend_state = VhtBackendState.INVALID
         try:
-            logging.info("Creating/staring instance...")
-            instance_state = self.backend.create_or_start_instance()
-
             logging.info("Preparing instance...")
-            self.backend.prepare_instance()
+            backend_state = self.backend.prepare()
 
             logging.info("Uploading workspace...")
             vhtin = NamedTemporaryFile(mode='w+b', prefix='vhtin-', suffix='.tbz2', delete=False)
@@ -75,8 +78,7 @@ class VHTClient:
             self.backend.upload_workspace(vhtin.name)
 
             logging.info("Executing...")
-            cmds = ["pwd",
-                    "pip install -r requirements.txt",
+            cmds = ["pip install -r requirements.txt",
                     "python build.py cbuild vht"]
 
             self.backend.run_commands(cmds)
@@ -92,4 +94,4 @@ class VHTClient:
                 os.remove(vhtin.name)
             if vhtout:
                 os.remove(vhtout.name)
-            self.backend.cleanup_instance(instance_state)
+            self.backend.cleanup(backend_state)
