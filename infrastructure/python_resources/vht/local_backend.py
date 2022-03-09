@@ -3,10 +3,9 @@
 import logging
 import subprocess
 import tarfile
-from glob import iglob
 from pathlib import Path
 
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, NamedTemporaryFile
 from typing import List, Union
 
 from .backend import VhtBackend, VhtBackendState
@@ -39,9 +38,14 @@ class LocalBackend(VhtBackend):
             archive.extractall(path=self._workdir.name)
 
     def run_commands(self, cmds: List[str]):
-        for cmd in cmds:
-            logging.info("VHT> %s", cmd)
-            subprocess.run(cmd, shell=True, cwd=self._workdir.name)
+        shfile = NamedTemporaryFile(prefix="script-", suffix=".sh", dir=self._workdir.name, delete=False)
+        with open(shfile.name, mode="w", encoding='UTF-8', newline='\n') as f:
+            f.write("#!/bin/bash\n")
+            f.write("set +x\n")
+            f.write("\n".join(cmds))
+            f.write("\n")
+
+        subprocess.run(["bash", shfile.name], shell=True, cwd=self._workdir.name)
 
     def download_workspace(self, tarball: Union[str, Path], globs: List[str] = ['**/*']):
         logging.info("Archiving workspace from %s", self._workdir.name)

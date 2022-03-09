@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from tempfile import NamedTemporaryFile
 
 import boto3
 import logging
@@ -10,7 +11,6 @@ from botocore.exceptions import WaiterError
 from pathlib import Path
 from typing import List, Union
 
-from .aws_client import AwsClient
 from .backend import VhtBackend, VhtBackendState
 
 
@@ -572,8 +572,27 @@ class AwsBackend(VhtBackend):
 
     def run_commands(self, cmds: List[str]):
         self._init()
-        commands = [f"runuser -l ubuntu -c 'source {self.AMI_WORKDIR}/vars && pushd {self.AMI_WORKDIR}/workspace && {cmd}'" for cmd in cmds]
-        self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
+
+        shfile = Path(NamedTemporaryFile(prefix="script-", suffix=".sh", delete=False).name)
+        try:
+            with open(shfile, mode="w", encoding='UTF-8', newline='\n') as f:
+                f.write("#!/bin/bash\n")
+                f.write("set +x\n")
+                f.write("\n".join(cmds))
+                f.write("\n")
+
+            self.upload_file_to_cloud(str(shfile), shfile.name)
+
+            commands = [
+                f"runuser -l ubuntu -c 'aws s3 cp s3://{self.s3_bucket_name}/{shfile.name} "
+                f"{self.AMI_WORKDIR}/{shfile.name} && chmod +x {self.AMI_WORKDIR}/{shfile.name}'",
+                f"runuser -l ubuntu -c 'source {self.AMI_WORKDIR}/vars "
+                f"&& pushd {self.AMI_WORKDIR}/workspace && {self.AMI_WORKDIR}/{shfile.name}'"
+            ]
+            self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
+        finally:
+            os.unlink(shfile)
+            self.delete_file_from_cloud(shfile.name)
 
     def upload_workspace(self, filename: Union[str, Path]):
         self._init()
