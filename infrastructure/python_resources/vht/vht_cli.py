@@ -40,6 +40,7 @@ class VhtCli:
             func(vht_client, *func_args)
         except RuntimeError as e:
             if e.__cause__:
+                logging.error(e.__cause__.__doc__)
                 logging.error(e.__cause__)
             if str(e):
                 logging.error(e)

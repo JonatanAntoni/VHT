@@ -64,7 +64,7 @@ class VhtBackend:
         """
         raise NotImplementedError()
 
-    def download_workspace(self, tarball: Union[str, Path]):
+    def download_workspace(self, tarball: Union[str, Path], globs: List[str] = ['**/*']):
         """Download the workspace content into given tarball.
 
         Params:

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from typing import List, Union
 
 import boto3
 import logging
@@ -9,7 +8,9 @@ import time
 from botocore.exceptions import ClientError
 from botocore.exceptions import WaiterError
 from pathlib import Path
+from typing import List, Union
 
+from .aws_client import AwsClient
 from .backend import VhtBackend, VhtBackendState
 
 
@@ -40,10 +41,11 @@ class AwsBackend(VhtBackend):
         self.ami_id: str = os.environ.get('AWS_AMI_ID', None)
         self.ami_version: str = os.environ.get('AWS_AMI_VERSION', None)
         self.iam_profile: str = os.environ.get('AWS_IAM_PROFILE', None)
+        self.instance_name: str = os.environ.get('AWS_INSTANCE_NAME', None)
         self.instance_id: str = os.environ.get('AWS_INSTANCE_ID', None)
         self.instance_type: str = os.environ.get('AWS_INSTANCE_TYPE', 't2.micro')
         self.key_name: str = os.environ.get('AWS_KEY_NAME', None)
-        self.s3_bucket_name: str = os.environ.get('AWS_S3_BUCKET', None)
+        self.s3_bucket_name: str = os.environ.get('AWS_S3_BUCKET_NAME', None)
         self.security_group_id: str = os.environ.get('AWS_SECURITY_GROUP_ID', None)
         self.subnet_id: str = os.environ.get('AWS_SUBNET_ID', None)
         self.keep_ec2_instance: bool = (os.environ.get('AWS_KEEP_EC2_INSTANCES', 'false').lower() == 'true')
@@ -54,6 +56,7 @@ class AwsBackend(VhtBackend):
             f"ami_id={self.ami_id},"
             f"ami_version={self.ami_version},"
             f"iam_profile={self.iam_profile},"
+            f"instance_name={self.instance_name},"
             f"instance_id={self.instance_id},"
             f"instance_type={self.instance_type},"
             f"key_name={self.key_name},"
@@ -109,7 +112,15 @@ class AwsBackend(VhtBackend):
         logging.info("aws:setting up aws backend")
 
         # EC2-related info is not needed if an instance is already created
-        if self.instance_id is None:
+        if self.instance_name and not self.instance_id:
+            self.instance_id = self.find_instance_by_name(self.instance_name)
+
+        if not self.instance_id:
+            if not self.instance_name:
+                user = os.environ.get('USER', os.environ.get('USERNAME', "unknown"))
+                host = os.environ.get('HOSTNAME', "unknown")
+                self.instance_name = f"{user}@{host}"
+
             if not self.ami_id:
                 if not self.ami_version:
                     logging.error("Either `AWS_AMI_ID` or `AWS_AMI_VERSION` should be presented as env var!")
@@ -130,10 +141,35 @@ class AwsBackend(VhtBackend):
                 raise RuntimeError("aws:environment variable `AWS_SUBNET_ID` needs to be present!")
 
         if not self.s3_bucket_name:
-            logging.error("aws:environment variable `AWS_S3_BUCKET` needs to be present!")
-            raise RuntimeError("aws:environment variable `AWS_S3_BUCKET` needs to be present!")
+            logging.error("aws:environment variable `AWS_S3_BUCKET_NAME` needs to be present!")
+            raise RuntimeError("aws:environment variable `AWS_S3_BUCKET_NAME` needs to be present!")
 
         logging.info(f"aws:aws__repr__:{self.__repr__()}")
+
+    def find_instance_by_name(self, name: str) -> Union[str, None]:
+        instance_id = None
+        name_filter = [
+            {'Name': 'tag:Name', 'Values': [name]},
+            {'Name': 'instance-state-name', 'Values': ['running', 'stopped']}
+        ]
+        response = self._ec2_client.describe_instances(Filters=name_filter)
+
+        if 'Reservations' not in response:
+            logging.debug("Response doesn't contain element 'Reservations'")
+        elif len(response['Reservations']) == 0:
+            logging.debug("Response doesn't contain elements in 'Reservations'")
+        elif len(response['Reservations']) > 1:
+            logging.warning("Cannot identify EC2 instance by name '%s' due to ambiguity!", self.instance_name)
+        elif 'Instances' not in response['Reservations'][0]:
+            logging.debug("Response doesn't contain element 'Instances' in 'Reservations'")
+        elif len(response['Reservations'][0]['Instances']) != 1:
+            logging.debug("Response doesn't contain single instance in 'Reservations'")
+        elif 'InstanceId' not in response['Reservations'][0]['Instances'][0]:
+            logging.debug("Response doesn't contain element 'InstanceId' in 'Instances'")
+        else:
+            instance_id = response['Reservations'][0]['Instances'][0]['InstanceId']
+            logging.info("Resolved EC2 instance by name to '%s'.", instance_id)
+        return instance_id
 
     def create_instance(self):
         """
@@ -151,7 +187,10 @@ class AwsBackend(VhtBackend):
             KeyName=self.key_name,
             SecurityGroupIds=[self.security_group_id],
             SubnetId=self.subnet_id,
-            TagSpecifications=[{'ResourceType': 'instance', 'Tags': [{'Key': 'VHT_CLI', 'Value': 'true'}]}],
+            TagSpecifications=[{'ResourceType': 'instance', 'Tags': [
+                {'Key': 'Name', 'Value': self.instance_name},
+                {'Key': 'VHT_CLI', 'Value': 'true'}
+            ]}],
             IamInstanceProfile={'Name': self.iam_profile}
         )
 
@@ -183,7 +222,7 @@ class AwsBackend(VhtBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.run_instances
         """
-        kwargs = {k: v for k, v in kwargs if v}
+        kwargs = {k: v for k, v in kwargs.items() if v}
 
         logging.debug('aws:DryRun=True to test for permission check')
         logging.debug(f"aws:create_ec2_instance:kwargs:{kwargs}")
@@ -551,15 +590,23 @@ class AwsBackend(VhtBackend):
         finally:
             self.delete_file_from_cloud(filename.name)
 
-    def download_workspace(self, filename: Union[str, Path]):
+    def download_workspace(self, filename: Union[str, Path], globs: List[str] = ['**/*']):
         self._init()
         if isinstance(filename, str):
             filename = Path(filename)
         try:
+            tarbz2 = [f"rm -f {self.AMI_WORKDIR}/{filename.stem}.tar"]
+            for pattern in globs:
+                if pattern.startswith("-:"):
+                    tarbz2.append(f"tar dvf {self.AMI_WORKDIR}/{filename.stem}.tar $(find {pattern[2:]} -type f)")
+                else:
+                    tarbz2.append(f"tar uvf {self.AMI_WORKDIR}/{filename.stem}.tar $(find {pattern} -type f)")
+            tarbz2.append(f"bzip2 {self.AMI_WORKDIR}/{filename.stem}.tar")
+
             commands = [
-                f"runuser -l ubuntu -c 'cd {self.AMI_WORKDIR}/workspace; tar cvjf {self.AMI_WORKDIR}/{filename.name} .'",
-                f"runuser -l ubuntu -c 'aws s3 cp {self.AMI_WORKDIR}/{filename.name} s3://{self.s3_bucket_name}/{filename.name}'",
-                f"runuser -l ubuntu -c 'rm -f {self.AMI_WORKDIR}/{filename.name}'"
+                f"runuser -l ubuntu -c 'cd {self.AMI_WORKDIR}/workspace; {'; '.join(tarbz2)}'",
+                f"runuser -l ubuntu -c 'aws s3 cp {self.AMI_WORKDIR}/{filename.stem}.tar.bz2 s3://{self.s3_bucket_name}/{filename.name}'",
+                f"runuser -l ubuntu -c 'rm -f {self.AMI_WORKDIR}/{filename.stem}.tar.bz2'",
             ]
             self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
             self.download_file_from_cloud(str(filename), filename.name)
@@ -911,9 +958,9 @@ class AwsBackend(VhtBackend):
 
     def cleanup(self, state):
         self._init()
-        if state == VhtBackend.INSTANCE_RUNNING:
+        if (state == VhtBackendState.RUNNING) or (state == VhtBackendState.INVALID):
             pass
-        elif (state == VhtBackend.INSTANCE_STARTED) or self.keep_ec2_instance:
+        elif (state == VhtBackendState.STARTED) or self.keep_ec2_instance:
             self.stop_instance()
         else:
             self.terminate_instance()

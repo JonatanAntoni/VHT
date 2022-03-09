@@ -3,11 +3,15 @@
 import logging
 import os
 import tarfile
+import yaml
 
+from glob import iglob
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import List
 
 from .backend import VhtBackend, VhtBackendState
+from .helper import create_archive
 
 
 class VHTClient:
@@ -60,11 +64,23 @@ class VHTClient:
     def cleanup(self, state: VhtBackendState = VhtBackendState.CREATED):
         return self.backend.cleanup(state)
 
-    def run(self, workdir: str = os.getcwd()):
+    def run(self, specfile: Path = Path.cwd().joinpath("vht.yml")):
         """Run the VHT job in the given WORKDIR"""
         vhtin = None
         vhtout = None
         backend_state = VhtBackendState.INVALID
+
+        if not specfile.exists():
+            raise RuntimeError from FileNotFoundError(specfile)
+
+        with open(specfile) as file:
+            spec = yaml.safe_load(file)
+
+        workdir = Path(spec.get('workdir', specfile.parent))
+        upload = spec.get('upload', ['**/*'])
+        steps = spec.get('steps', [])
+        download = spec.get('download', ['**/*'])
+
         try:
             logging.info("Preparing instance...")
             backend_state = self.backend.prepare()
@@ -72,21 +88,20 @@ class VHTClient:
             logging.info("Uploading workspace...")
             vhtin = NamedTemporaryFile(mode='w+b', prefix='vhtin-', suffix='.tbz2', delete=False)
             vhtin.close()
-            with tarfile.open(vhtin.name, mode='w:bz2') as archive:
-                archive.add(workdir, arcname="./")
+            create_archive(vhtin.name, workdir, upload)
 
             self.backend.upload_workspace(vhtin.name)
 
             logging.info("Executing...")
-            cmds = ["pip install -r requirements.txt",
-                    "python build.py cbuild vht"]
-
-            self.backend.run_commands(cmds)
+            for step in steps:
+                if 'run' in step:
+                    cmds = [cmd for cmd in step['run'].split('\n') if cmd]
+                    self.backend.run_commands(cmds)
 
             logging.info("Downloading workspace...")
             vhtout = NamedTemporaryFile(mode='r+b', prefix='vhtout-', suffix='.tbz2', delete=False)
             vhtout.close()
-            self.backend.download_workspace(vhtout.name)
+            self.backend.download_workspace(vhtout.name, download)
             with tarfile.open(vhtout.name, mode='r:bz2') as archive:
                 archive.extractall(path=workdir)
         finally:
