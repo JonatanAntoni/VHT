@@ -42,7 +42,7 @@ setup(
         ]
     },
     entry_points={
-        'console_scripts': ['vht_cli=vht.vht_cli:main']
+        'console_scripts': ['vht_cli=vht.vht_cli:VhtCli']
     },
     scripts=['vht/vht_cli.py'],
     python_requires='>=3.8',
