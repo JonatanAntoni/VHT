@@ -602,7 +602,7 @@ class AwsBackend(VhtBackend):
             self.upload_file_to_cloud(str(filename), filename.name)
             commands = [
                 f"runuser -l ubuntu -c 'aws s3 cp s3://{self.s3_bucket_name}/{filename.name} {self.AMI_WORKDIR}/{filename.name}'",
-                f"runuser -l ubuntu -c 'cd {self.AMI_WORKDIR}/workspace; tar xvf {self.AMI_WORKDIR}/{filename.name}'",
+                f"runuser -l ubuntu -c 'cd {self.AMI_WORKDIR}/workspace; tar xf {self.AMI_WORKDIR}/{filename.name}'",
                 f"runuser -l ubuntu -c 'rm -f {self.AMI_WORKDIR}/{filename.name}'"
             ]
             self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
@@ -617,9 +617,9 @@ class AwsBackend(VhtBackend):
             tarbz2 = [f"rm -f {self.AMI_WORKDIR}/{filename.stem}.tar"]
             for pattern in globs:
                 if pattern.startswith("-:"):
-                    tarbz2.append(f"tar dvf {self.AMI_WORKDIR}/{filename.stem}.tar $(find {pattern[2:]} -type f)")
+                    tarbz2.append(f"tar df {self.AMI_WORKDIR}/{filename.stem}.tar $(find {pattern[2:]} -type f)")
                 else:
-                    tarbz2.append(f"tar uvf {self.AMI_WORKDIR}/{filename.stem}.tar $(find {pattern} -type f)")
+                    tarbz2.append(f"tar uf {self.AMI_WORKDIR}/{filename.stem}.tar $(find {pattern} -type f)")
             tarbz2.append(f"bzip2 {self.AMI_WORKDIR}/{filename.stem}.tar")
 
             commands = [

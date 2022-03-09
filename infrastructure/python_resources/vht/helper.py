@@ -30,7 +30,8 @@ def _iglob(pathname: Union[str, Path], root_dir: Union[str, Path] = Path.cwd(),
 
 def create_archive(filename: Union[str, Path],
                    root_dir: Union[str, Path] = Path.cwd(),
-                   globs: List[str] = ["**/*"]):
+                   globs: List[str] = ["**/*"],
+                   verbose: bool = False):
     """Create an bzip2-compressed tarball of the given directory.
 
     Files matching the given glob patterns underneath root_dir are archived. The patterns
@@ -54,3 +55,5 @@ def create_archive(filename: Union[str, Path],
                 files.update(set(_iglob(pattern, root_dir=root_dir)))
         for file in files:
             archive.add(file, arcname=file.relative_to(root_dir))
+        if verbose:
+            archive.list(verbose=False)

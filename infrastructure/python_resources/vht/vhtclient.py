@@ -76,7 +76,7 @@ class VHTClient:
         with open(specfile) as file:
             spec = yaml.safe_load(file)
 
-        workdir = Path(spec.get('workdir', specfile.parent))
+        workdir = specfile.parent.joinpath(spec.get('workdir', '.')).resolve()
         upload = spec.get('upload', ['**/*'])
         steps = spec.get('steps', [])
         download = spec.get('download', ['**/*'])
@@ -88,7 +88,7 @@ class VHTClient:
             logging.info("Uploading workspace...")
             vhtin = NamedTemporaryFile(mode='w+b', prefix='vhtin-', suffix='.tbz2', delete=False)
             vhtin.close()
-            create_archive(vhtin.name, workdir, upload)
+            create_archive(vhtin.name, workdir, upload, verbose=True)
 
             self.backend.upload_workspace(vhtin.name)
 
@@ -103,6 +103,7 @@ class VHTClient:
             vhtout.close()
             self.backend.download_workspace(vhtout.name, download)
             with tarfile.open(vhtout.name, mode='r:bz2') as archive:
+                archive.list(verbose=False)
                 archive.extractall(path=workdir)
         finally:
             if vhtin:

@@ -45,6 +45,7 @@ class VhtCli:
             if str(e):
                 logging.error(e)
             sys.exit(1)
+        sys.exit(0)
 
     @staticmethod
     def _parser() -> ArgumentParser:
