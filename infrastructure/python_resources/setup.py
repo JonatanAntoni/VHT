@@ -30,7 +30,8 @@ setup(
     packages=['vht'],
     install_requires=[
         'boto3~=1.20',
-        'botocore~=1.20'
+        'botocore~=1.20',
+        'PyYAML~=6.0'
     ],
     extras_require={
         'dev': [
