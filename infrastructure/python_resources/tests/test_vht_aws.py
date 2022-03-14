@@ -6,7 +6,7 @@ import os
 from dateutil.tz import tzutc, tzlocal
 from unittest import TestCase, skip
 from unittest.mock import patch, Mock
-from vht import VHTClient, AwsBackend
+from vht import AwsBackend
 
 # stubbers
 # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/stubber.html#
@@ -20,8 +20,7 @@ class TestVhtAws(TestCase):
     @classmethod
     def setUpClass(cls):
         cls.data = {
-            'VHT_WORKSPACE': 'test\\',
-            'AWS_S3_BUCKET': 'gh-orta-vht',
+            'AWS_S3_BUCKET_NAME': 'gh-orta-vht',
             'AWS_S3_KEYPREFIX': 'ssm_test',
             'AWS_AMI_ID': 'i-dsad3213d',
             'AWS_AMI_VERSION': '1.1.0',
@@ -36,6 +35,10 @@ class TestVhtAws(TestCase):
         # mandatory data
         # optional data
 
+    def tearDown(self) -> None:
+        for k in filter(lambda v: v.startswith("AWS_"), os.environ.keys()):
+            del os.environ[k]
+
     def get_vht_aws_instance(self):
         self.set_mandatory_env_vars()
         self.set_create_instance_env_vars()
@@ -45,18 +48,12 @@ class TestVhtAws(TestCase):
         self.set_s3_keyprefix_env()
         self.set_key_name_env()
         with patch.object(AwsBackend, '_is_aws_credentials_present', return_value=True):
-            aws_client = VHTClient("aws").backend
-        self.del_ami_id_env()
-        self.del_ami_version_env()
-        self.del_create_instance_env_vars()
-        self.del_instance_id_env()
-        self.del_key_name_env()
-        self.del_s3_keyprefix_env()
+            aws_client = AwsBackend()
+            aws_client._init()
         return aws_client
 
     def set_mandatory_env_vars(self):
-        os.environ["VHT_WORKSPACE"] = self.data['VHT_WORKSPACE']
-        os.environ["AWS_S3_BUCKET"] = self.data['AWS_S3_BUCKET']
+        os.environ["AWS_S3_BUCKET_NAME"] = self.data['AWS_S3_BUCKET_NAME']
         os.environ["AWS_S3_KEYPREFIX"] = self.data['AWS_S3_KEYPREFIX']
 
     def set_create_instance_env_vars(self):
@@ -110,79 +107,64 @@ class TestVhtAws(TestCase):
 
             # test with ami_id
             self.set_ami_id_env()
-            aws_client = VHTClient("aws").backend
+            aws_client = AwsBackend()
+            aws_client._init()
 
             # test with key_name
             self.set_key_name_env()
-            aws_client = VHTClient("aws").backend
-            assert aws_client.key_name == self.data['AWS_KEY_NAME'], \
-                f"Found {aws_client.key_name}. Expected {self.data['key_name']}"
+            aws_client = AwsBackend()
+            aws_client._init()
+            self.assertEqual(self.data['AWS_KEY_NAME'], aws_client.key_name)
             self.del_key_name_env()
 
             # test mandatory env vars
-            aws_client = VHTClient("aws").backend
-            assert aws_client.instance_type == self.data['AWS_INSTANCE_TYPE'], \
-                f"Found {aws_client.instance_type}. Expected {self.data['AWS_INSTANCE_TYPE']}"
-            assert aws_client.iam_profile == self.data['AWS_IAM_PROFILE'], \
-                f"Found {aws_client.iam_profile}. Expected {self.data['AWS_IAM_PROFILE']}"
-            assert aws_client.workspace == self.data['VHT_WORKSPACE'], \
-                f"Found {aws_client.workspace}. Expected {self.data['VHT_WORKSPACE']}"
-            assert aws_client.s3_bucket_name == self.data['AWS_S3_BUCKET'], \
-                f"Found {aws_client.s3_bucket_name}. Expected {self.data['AWS_S3_BUCKET']}"
-            assert aws_client.security_group_id == self.data['AWS_SECURITY_GROUP_ID'], \
-                f"Found {aws_client.security_group_id}. Expected {self.data['AWS_SECURITY_GROUP_ID']}"
-            assert aws_client.subnet_id == self.data['AWS_SUBNET_ID'], \
-                f"Found {aws_client.subnet_id}. Expected {self.data['AWS_SUBNET_ID']}"
-            assert aws_client.keep_ec2_instance == self.data['AWS_KEEP_EC2_INSTANCES'], \
-                f"Found {aws_client.keep_ec2_instance}. Expected {self.data['AWS_KEEP_EC2_INSTANCES']}"
+            aws_client = AwsBackend()
+            aws_client._init()
+            self.assertEqual(self.data['AWS_INSTANCE_TYPE'], aws_client.instance_type)
+            self.assertEqual(self.data['AWS_IAM_PROFILE'], aws_client.iam_profile)
+            self.assertEqual(self.data['AWS_S3_BUCKET_NAME'], aws_client.s3_bucket_name)
+            self.assertEqual(self.data['AWS_SECURITY_GROUP_ID'], aws_client.security_group_id)
+            self.assertEqual(self.data['AWS_SUBNET_ID'], aws_client.subnet_id)
+            self.assertEqual(self.data['AWS_KEEP_EC2_INSTANCES'], aws_client.keep_ec2_instance)
 
-            assert aws_client.ami_id == self.data['AWS_AMI_ID'], \
-                f"Found {aws_client.ami_id}. Expected {self.data['AWS_AMI_ID']}"
-            assert aws_client.ami_version is None, \
-                f"Found {aws_client.ami_version}. Expected None"
+            self.assertEqual(self.data['AWS_AMI_ID'], aws_client.ami_id)
+            self.assertFalse(aws_client.ami_version)
 
             # Negative test
-            assert aws_client.instance_id is None, \
-                f"Found {aws_client.instance_id}. Expected None"
-            assert aws_client.s3_keyprefix == self.data['AWS_S3_KEYPREFIX'], \
-                f"Found {aws_client.s3_keyprefix}. Expected {self.data['AWS_S3_KEYPREFIX']}."
-            assert aws_client.key_name is None, \
-                f"Found {aws_client.key_name}. Expected \'\'"
+            self.assertFalse(aws_client.instance_id)
+            self.assertEqual(self.data['AWS_S3_KEYPREFIX'], aws_client.s3_keyprefix)
+            self.assertFalse(aws_client.key_name)
 
             # test with ami_id && ami_version
             self.set_ami_version_env()
-            aws_client = VHTClient("aws").backend
-            assert aws_client.ami_id == self.data['AWS_AMI_ID'], \
-                f"Found {aws_client.ami_id}. Expected {self.data['AWS_AMI_ID']}"
-            assert aws_client.ami_version == self.data['AWS_AMI_VERSION'], \
-                f"Found {aws_client.ami_version}. Expected {self.data['AWS_AMI_VERSION']}"
+            aws_client = AwsBackend()
+            aws_client._init()
+            self.assertEqual(self.data['AWS_AMI_ID'], aws_client.ami_id)
+            self.assertEqual(self.data['AWS_AMI_VERSION'], aws_client.ami_version)
 
             # test with ami_version()
             with patch.object(AwsBackend, 'get_image_id', return_value=self.data['AWS_AMI_ID']):
-                aws_client = VHTClient("aws").backend
-                assert aws_client.ami_id == self.data['AWS_AMI_ID'], \
-                    f"Found {aws_client.ami_id}. Expected {self.data['AWS_AMI_ID']}"
-                assert aws_client.ami_version == self.data['AWS_AMI_VERSION'], \
-                    f"Found {aws_client.ami_version}. Expected {self.data['AWS_AMI_VERSION']}"
+                aws_client = AwsBackend()
+                aws_client._init()
+                self.assertEqual(self.data['AWS_AMI_ID'], aws_client.ami_id)
+                self.assertEqual(self.data['AWS_AMI_VERSION'], aws_client.ami_version)
                 self.del_ami_version_env()
                 self.del_ami_id_env()
 
             # test with instance id
             self.del_create_instance_env_vars()
             self.set_instance_id_env()
-            aws_client = VHTClient("aws").backend
-            assert aws_client.instance_id == self.data['AWS_INSTANCE_ID'], \
-                f"Found {aws_client.instance_id}. Expected {self.data['AWS_INSTANCE_ID']}"
-            assert aws_client.ami_id is None, \
-                f"Found {aws_client.ami_id}. Expected None"
-            assert aws_client.ami_version is None, \
-                f"Found {aws_client.ami_version}. Expected None"
+            aws_client = AwsBackend()
+            aws_client._init()
+            self.assertEqual(self.data['AWS_INSTANCE_ID'], aws_client.instance_id)
+            self.assertFalse(aws_client.ami_id)
+            self.assertFalse(aws_client.ami_version)
 
             # test with s3_keyprefix
             self.set_s3_keyprefix_env()
-            aws_client = VHTClient("aws").backend
-            assert aws_client.s3_keyprefix == self.data['AWS_S3_KEYPREFIX'], \
-                f"Found {aws_client.s3_keyprefix}. Expected {self.data['AWS_S3_KEYPREFIX']}"
+            aws_client = AwsBackend()
+            aws_client._init()
+            self.assertEqual(self.data['AWS_S3_KEYPREFIX'], aws_client.s3_keyprefix)
 
     def test_create_instance(self):
         aws_client = self.get_vht_aws_instance()
@@ -321,10 +303,10 @@ class TestVhtAws(TestCase):
         instance_id = aws_client.create_instance()
 
         # asserting values
-        assert aws_client._ec2_client.run_instances.called
-        assert aws_client.wait_ec2_status_ok.called
-        assert aws_client.wait_ec2_running.called
-        assert instance_id == 'i-064a8d261aea65d9e'
+        aws_client._ec2_client.run_instances.assert_called()
+        aws_client.wait_ec2_status_ok.assert_called()
+        aws_client.wait_ec2_running.assert_called()
+        self.assertEqual('i-064a8d261aea65d9e', instance_id)
 
     def test_delete_file_from_cloud(self):
         aws_client = self.get_vht_aws_instance()
@@ -339,8 +321,8 @@ class TestVhtAws(TestCase):
         response = aws_client.delete_file_from_cloud('key')
 
         # asserting values
-        assert aws_client._s3_client.delete_object.called
-        assert response is None
+        aws_client._s3_client.delete_object.assert_called()
+        self.assertIs(response, None)
 
     def test_download_file_from_cloud(self):
         aws_client = self.get_vht_aws_instance()
@@ -355,8 +337,8 @@ class TestVhtAws(TestCase):
         response = aws_client.download_file_from_cloud('key', 'filename')
 
         # asserting values
-        assert aws_client._s3_client.download_file.called
-        assert response is None
+        aws_client._s3_client.download_file.assert_called()
+        self.assertIs(response, None)
 
     def test_get_image_id(self):
         aws_client = self.get_vht_aws_instance()
@@ -421,8 +403,8 @@ class TestVhtAws(TestCase):
         response = aws_client.get_image_id()
 
         # asserting values
-        assert aws_client._ec2_client.describe_images.called
-        assert response == 'ami-0c5eeabe11f3a2685'
+        aws_client._ec2_client.describe_images.assert_called()
+        self.assertEqual('ami-0c5eeabe11f3a2685', response)
 
     def test_get_instance_state(self):
         aws_client = self.get_vht_aws_instance()
@@ -572,8 +554,8 @@ class TestVhtAws(TestCase):
         response = aws_client.get_instance_state()
 
         # asserting values
-        assert aws_client._ec2_client.describe_instances.called
-        assert response == 'running'
+        aws_client._ec2_client.describe_instances.assert_called()
+        self.assertEqual('running', response)
 
     @skip('Find out how to mock s3_resource.Object.get')
     def test_get_s3_file_content(self):
@@ -581,7 +563,7 @@ class TestVhtAws(TestCase):
 
         # mocking methods
         # setting return values for the mocked methods
-        aws_client._s3_resource.Object('AWS_S3_BUCKET', 'key').get = Mock(
+        aws_client._s3_resource.Object('AWS_S3_BUCKET_NAME', 'key').get = Mock(
             return_value="drwxr-xr-x  13 root root  4096 Apr 30  2021 var"
         )
 
@@ -589,8 +571,8 @@ class TestVhtAws(TestCase):
         response = aws_client.get_s3_file_content('key')
 
         # asserting values
-        assert aws_client._s3_resource.Object.called
-        assert response == "drwxr-xr-x  13 root root  4096 Apr 30  2021 var"
+        aws_client._s3_resource.Object.assert_called()
+        self.assertEqual("drwxr-xr-x  13 root root  4096 Apr 30  2021 var", response)
 
     def test_get_s3_ssm_command_id_key(self):
         aws_client = self.get_vht_aws_instance()
@@ -601,8 +583,7 @@ class TestVhtAws(TestCase):
         response = aws_client.get_s3_ssm_command_id_key(command_id, output_type)
         expected_response = f"{self.data['AWS_S3_KEYPREFIX']}/{command_id}/{self.data['AWS_INSTANCE_ID']}/awsrunShellScript/0.awsrunShellScript/{output_type}"
 
-        assert response == expected_response, \
-            f"response = {response} :: expected_response = {expected_response}"
+        self.assertEqual(expected_response, response)
 
     def test_get_ssm_command_id_status(self):
         aws_client = self.get_vht_aws_instance()
@@ -669,8 +650,8 @@ class TestVhtAws(TestCase):
         )
 
         # asserting values
-        assert aws_client._ssm_client.list_commands.called
-        assert response == 'Success'
+        aws_client._ssm_client.list_commands.assert_called()
+        self.assertEqual('Success', response)
 
     def test_get_ssm_command_id_status_details(self):
         aws_client = self.get_vht_aws_instance()
@@ -721,8 +702,8 @@ class TestVhtAws(TestCase):
         )
 
         # asserting values
-        assert aws_client._ssm_client.get_command_invocation.called
-        assert response == 'Success'
+        aws_client._ssm_client.get_command_invocation.assert_called()
+        self.assertEqual('Success', response)
 
     def test_get_ssm_command_id_stdout_url(self):
         aws_client = self.get_vht_aws_instance()
@@ -777,8 +758,8 @@ class TestVhtAws(TestCase):
         )
 
         # asserting values
-        assert aws_client._ssm_client.list_command_invocations.called
-        assert response == 'https://s3.eu-west-1.amazonaws.com/gh-orta-vht/ssm/da584039-585c-4fd7-b30f-fad58c42c881/i-000f2435623398464/awsrunShellScript/0.awsrunShellScript/stdout'
+        aws_client._ssm_client.list_command_invocations.assert_called()
+        self.assertEqual('https://s3.eu-west-1.amazonaws.com/gh-orta-vht/ssm/da584039-585c-4fd7-b30f-fad58c42c881/i-000f2435623398464/awsrunShellScript/0.awsrunShellScript/stdout', response)
 
     def test_get_ssm_command_id_stderr_url(self):
         aws_client = self.get_vht_aws_instance()
@@ -833,8 +814,8 @@ class TestVhtAws(TestCase):
         )
 
         # asserting values
-        assert aws_client._ssm_client.list_command_invocations.called
-        assert response == 'https://s3.eu-west-1.amazonaws.com/gh-orta-vht/ssm/da584039-585c-4fd7-b30f-fad58c42c881/i-000f2435623398464/awsrunShellScript/0.awsrunShellScript/stderr'
+        aws_client._ssm_client.list_command_invocations.assert_called()
+        self.assertEqual('https://s3.eu-west-1.amazonaws.com/gh-orta-vht/ssm/da584039-585c-4fd7-b30f-fad58c42c881/i-000f2435623398464/awsrunShellScript/0.awsrunShellScript/stderr', response)
 
     @skip('TODO')
     def test_send_ssm_shell_command(self):

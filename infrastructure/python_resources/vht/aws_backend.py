@@ -25,6 +25,114 @@ class AwsBackend(VhtBackend):
     def priority() -> int:
         return 10
 
+    @property
+    def ami_id(self) -> str:
+        """Amazon Machine Image ID (AWS_AMI_ID)."""
+        return self._ami_id or os.environ.get('AWS_AMI_ID', '')
+
+    @ami_id.setter
+    def ami_id(self, value: str):
+        self._ami_id = value
+
+    @property
+    def ami_version(self) -> str:
+        """Amazon Machine Image version (AWS_AMI_VERSION)."""
+        return self._ami_version or os.environ.get('AWS_AMI_VERSION', '')
+
+    @ami_version.setter
+    def ami_version(self, value: str):
+        self._ami_version = value
+
+    @property
+    def iam_profile(self) -> str:
+        """Amazon IAM profile (AWS_IAM_PROFILE)."""
+        return self._iam_profile or os.environ.get('AWS_IAM_PROFILE', '')
+
+    @iam_profile.setter
+    def iam_profile(self, value: str):
+        self._iam_profile = value
+
+    @property
+    def instance_name(self) -> str:
+        """Amazon EC2 instance name (AWS_INSTANCE_NAME)."""
+        return self._instance_name or os.environ.get('AWS_INSTANCE_NAME', '')
+
+    @instance_name.setter
+    def instance_name(self, value: str):
+        self._instance_name = value
+
+    @property
+    def instance_id(self) -> str:
+        """Amazon EC2 instance id (AWS_INSTANCE_ID)."""
+        return self._instance_id or os.environ.get('AWS_INSTANCE_ID', '')
+
+    @instance_id.setter
+    def instance_id(self, value: str):
+        self._instance_id = value
+
+    @property
+    def instance_type(self) -> str:
+        """Amazon EC2 instance type (AWS_INSTANCE_TYPE)."""
+        return self._instance_type or os.environ.get('AWS_INSTANCE_TYPE', 't2.micro')
+
+    @instance_type.setter
+    def instance_type(self, value: str):
+        self._instance_type = value
+
+    @property
+    def key_name(self) -> str:
+        """Amazon EC2 SSH key name (AWS_KEY_NAME)."""
+        return self._key_name or os.environ.get('AWS_KEY_NAME', '')
+
+    @key_name.setter
+    def key_name(self, value: str):
+        self._key_name = value
+
+    @property
+    def s3_bucket_name(self) -> str:
+        """Amazon S3 bucket name (AWS_S3_BUCKET_NAME)."""
+        return self._s3_bucket_name or os.environ.get('AWS_S3_BUCKET_NAME', '')
+
+    @s3_bucket_name.setter
+    def s3_bucket_name(self, value: str):
+        self._s3_bucket_name = value
+
+    @property
+    def security_group_id(self) -> str:
+        """Amazon EC2 security group id (AWS_SECURITY_GROUP_ID)."""
+        return self._security_group_id or os.environ.get('AWS_SECURITY_GROUP_ID', '')
+
+    @security_group_id.setter
+    def security_group_id(self, value: str):
+        self._security_group_id = value
+
+    @property
+    def subnet_id(self) -> str:
+        """Amazon EC2 subnet id (AWS_SUBNET_ID)."""
+        return self._subnet_id or os.environ.get('AWS_SUBNET_ID', '')
+
+    @subnet_id.setter
+    def subnet_id(self, value: str):
+        self._subnet_id = value
+
+    @property
+    def keep_ec2_instance(self) -> bool:
+        """Amazon EC2 subnet id (AWS_KEEP_EC2_INSTANCES)."""
+        return self._keep_ec2_instance or (os.environ.get('AWS_KEEP_EC2_INSTANCES', 'false').lower() == 'true')
+
+    @keep_ec2_instance.setter
+    def keep_ec2_instance(self, value: bool):
+        self._keep_ec2_instance = value
+
+    @property
+    def s3_keyprefix(self) -> bool:
+        """Amazon S3 storage key prefix (AWS_S3_KEYPREFIX)."""
+        return self._s3_keyprefix or os.environ.get('AWS_S3_KEYPREFIX', 'ssm')
+
+    @s3_keyprefix.setter
+    def s3_keyprefix(self, value: bool):
+        self._s3_keyprefix = value
+
     """
     VHT AWS Backend
 
@@ -38,18 +146,18 @@ class AwsBackend(VhtBackend):
     Some AWS-related info is expected as envs. See _setup.
     """
     def __init__(self):
-        self.ami_id: str = os.environ.get('AWS_AMI_ID', None)
-        self.ami_version: str = os.environ.get('AWS_AMI_VERSION', None)
-        self.iam_profile: str = os.environ.get('AWS_IAM_PROFILE', None)
-        self.instance_name: str = os.environ.get('AWS_INSTANCE_NAME', None)
-        self.instance_id: str = os.environ.get('AWS_INSTANCE_ID', None)
-        self.instance_type: str = os.environ.get('AWS_INSTANCE_TYPE', 't2.micro')
-        self.key_name: str = os.environ.get('AWS_KEY_NAME', None)
-        self.s3_bucket_name: str = os.environ.get('AWS_S3_BUCKET_NAME', None)
-        self.security_group_id: str = os.environ.get('AWS_SECURITY_GROUP_ID', None)
-        self.subnet_id: str = os.environ.get('AWS_SUBNET_ID', None)
-        self.keep_ec2_instance: bool = (os.environ.get('AWS_KEEP_EC2_INSTANCES', 'false').lower() == 'true')
-        self.s3_keyprefix = os.environ.get('AWS_S3_KEYPREFIX', 'ssm')
+        self._ami_id = None
+        self._ami_version = None
+        self._iam_profile = None
+        self._instance_name = None
+        self._instance_id = None
+        self._instance_type = None
+        self._key_name = None
+        self._s3_bucket_name = None
+        self._security_group_id = None
+        self._subnet_id = None
+        self._keep_ec2_instance = None
+        self._s3_keyprefix = None
 
     def __repr__(self):
         return (
@@ -638,9 +746,8 @@ class AwsBackend(VhtBackend):
 
         Parameters
         ----------
-        String
-            filename (Local Filename Path)
-            Key (Filepath to be stored on S3 Bucket)
+            filename: Local Filename Path
+            key: Filepath to be stored on S3 Bucket
 
         More
         ----------

@@ -8,10 +8,13 @@ from typing import Dict, Type, List, Union
 
 
 class VhtBackendState(Enum):
-    INVALID = 0
-    CREATED = 1
-    STARTED = 2
-    RUNNING = 3
+    INVALID = None
+    CREATED = 'created'
+    STARTED = 'started'
+    RUNNING = 'running'
+
+    def __str__(self):
+        return self.value
 
 
 class VhtBackend:

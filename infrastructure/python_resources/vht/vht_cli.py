@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import inspect
 import logging
+import re
 import sys
 
 from argparse import ArgumentParser, SUPPRESS, Namespace
+from enum import Enum
 from gettext import gettext as _
 from inspect import signature, Signature
 from itertools import islice
@@ -66,22 +68,37 @@ class VhtCli:
         return parser
 
     @staticmethod
+    def _add_argument(parser, argname: str, argtype: type = str, default=None, helptext: str = ''):
+        kwargs = {'help': helptext, 'required': default is None}
+        if argtype is bool:
+            kwargs['action'] = 'store_true'
+        elif issubclass(argtype, Enum):
+            kwargs['choices'] = list(filter(lambda v: v.value, argtype))
+            kwargs['type'] = type(kwargs['choices'][0])
+        else:
+            kwargs['type'] = argtype
+        if default is not None:
+            kwargs['default'] = default
+            if not kwargs['help'].endswith('\n'):
+                kwargs['help'] += '\n'
+            kwargs['help'] += f"Defaults to '{default}'."
+        parser.add_argument(f"--{argname.replace('_', '-')}", **kwargs)
+
+    @staticmethod
     def _add_backend_args(parser: ArgumentParser, backend: VhtBackend):
-        group = parser.add_argument_group("Backend properties")
-        for m, n in backend.__dict__.items():
-            if not m.startswith('_'):
-                if type(n) is bool:
-                    group.add_argument(f"--{m.replace('_', '-')}", action='store_true')
-                else:
-                    group.add_argument(f"--{m.replace('_', '-')}", default=n, type=str)
+        group = parser.add_argument_group(f"{backend.name()} backend properties")
+        for k, v in filter(lambda m: not m[0].startswith('_') and isinstance(m[1], property),
+                           backend.__class__.__dict__.items()):
+            sig = inspect.signature(v.fget)
+            VhtCli._add_argument(group, k, sig.return_annotation, getattr(backend, k), v.__doc__)
 
     @staticmethod
     def _consume_backend_args(backend: VhtBackend, args: Namespace):
         args = vars(args)
-        for m, n in backend.__dict__.items():
-            if not m.startswith('_'):
-                if m in args:
-                    backend.__dict__[m] = args[m]
+        for k, v in filter(lambda m: not m[0].startswith('_') and isinstance(m[1], property),
+                           backend.__class__.__dict__.items()):
+            if k in args:
+                setattr(backend, k, args[k])
 
     @staticmethod
     def _add_commands(parser: ArgumentParser):
@@ -92,13 +109,14 @@ class VhtCli:
 
         for m, n in VHTClient.__dict__.items():
             if isinstance(n, FunctionType) and not m.startswith('_'):
-                subparser = subparsers.add_parser(m.replace('_', '-'), help=n.__doc__)
+                func_help = n.__doc__.split('\n')[0] if n.__doc__ else ''
+                subparser = subparsers.add_parser(m.replace('_', '-'), help=func_help)
                 params = signature(n).parameters
                 for param in islice(params.items(), 1, None):
+                    param_help = re.search(f"{param[0]}: (.*)", n.__doc__).group(1) if n.__doc__ else ""
                     param_type = param[1].annotation if param[1].annotation != Signature.empty else str
                     param_default = param[1].default if param[1].default != Signature.empty else None
-                    subparser.add_argument(f"--{param[0].replace('_', '-')}", type=param_type, default=param_default,
-                                           required=(param[1].default == Signature.empty))
+                    VhtCli._add_argument(subparser, param[0], param_type, param_default, param_help)
 
 
 if __name__ == '__main__':

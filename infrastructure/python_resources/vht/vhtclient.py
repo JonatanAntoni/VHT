@@ -5,7 +5,6 @@ import os
 import tarfile
 import yaml
 
-from glob import iglob
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import List
@@ -33,39 +32,22 @@ class VHTClient:
             logging.error(f"{self.backend_desc} not supported!")
             raise RuntimeError()
 
-    def create_instance(self) -> str:
-        """Create a new VHT instance"""
-        return self.backend.create_instance()
-
-    def start_instance(self):
-        return self.backend.start_instance()
-
-    def stop_instance(self):
-        return self.backend.stop_instance()
-
-    def terminate_instance(self):
-        return self.backend.terminate_instance()
-
-    def get_instance_state(self):
-        return self.backend.get_instance_state()
-
-    def upload_file_to_cloud(self, filename: str, key: str):
-        return self.backend.upload_file_to_cloud(filename, key)
-
-    def download_file_from_cloud(self, filename, key):
-        return self.backend.download_file_from_cloud(filename, key)
-
-    def delete_file_from_cloud(self, key: str) -> str:
-        return self.backend.delete_file_from_cloud(key)
-
-    def prepare(self):
+    def prepare(self)  -> VhtBackendState:
+        """Prepare the backend to execute VHT workload."""
         return self.backend.prepare()
 
     def cleanup(self, state: VhtBackendState = VhtBackendState.CREATED):
-        return self.backend.cleanup(state)
+        """Cleanup backend into a former state.
+        Args:
+            state: The state to turn backend into.
+        """
+        self.backend.cleanup(state)
 
-    def run(self, specfile: Path = Path.cwd().joinpath("vht.yml")):
-        """Run the VHT job in the given WORKDIR"""
+    def run(self, specfile: Path = Path("./vht.yml")):
+        """Run the VHT job specified by given specfile.
+        Args:
+            specfile: Path to the YAML specfile.
+        """
         vhtin = None
         vhtout = None
         backend_state = VhtBackendState.INVALID
