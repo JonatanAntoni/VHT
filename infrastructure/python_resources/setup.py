@@ -25,9 +25,9 @@ def version_from_git_tag():
 
 
 setup(
-    name='vht',
+    name='arm-virtual-hardware',
     version='0.1.0',
-    packages=['vht'],
+    packages=['avh'],
     install_requires=[
         'boto3~=1.20',
         'botocore~=1.20',
@@ -36,6 +36,7 @@ setup(
     extras_require={
         'dev': [
             'coverage~=6.2',
+            'python-dateutil~=2.8',
             'pylint~=2.11',
             'restructuredtext_lint~=1.3',
             'setuptools~=59.4',
@@ -43,14 +44,13 @@ setup(
         ]
     },
     entry_points={
-        'console_scripts': ['vht_cli=vht.vht_cli:VhtCli']
+        'console_scripts': ['avh=avh.avh_cli:AvhCli']
     },
-    scripts=['vht/vht_cli.py'],
     python_requires='>=3.8',
     url='',
     license='',
-    author='Samuel Pelegrinello Caipers',
-    author_email='Samuel.PelegrinelloCaipers@arm.com',
+    author='Samuel Pelegrinello Caipers, Jonatan Antoni',
+    author_email='Samuel.PelegrinelloCaipers@arm.com, Jonatan.Antoni@arm.com',
     description='Arm Virtual Hardware Command Line Interface',
     long_description='',   # should be: open('README.rst').read()
     long_description_content_type='text/x-rst',

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Type, List, Union
 
 
-class VhtBackendState(Enum):
+class AvhBackendState(Enum):
     INVALID = None
     CREATED = 'created'
     STARTED = 'started'
@@ -17,10 +17,10 @@ class VhtBackendState(Enum):
         return self.value
 
 
-class VhtBackend:
+class AvhBackend:
     @staticmethod
-    def find_implementations() -> Dict[str, Type[VhtBackend]]:
-        return {cls.name(): cls for cls in VhtBackend.__subclasses__()}
+    def find_implementations() -> Dict[str, Type[AvhBackend]]:
+        return {cls.name(): cls for cls in AvhBackend.__subclasses__()}
 
     @staticmethod
     def name() -> str:
@@ -42,7 +42,7 @@ class VhtBackend:
         """
         raise NotImplementedError()
 
-    def prepare(self) -> VhtBackendState:
+    def prepare(self) -> AvhBackendState:
         """Runs required commands to prepare the backend for VHT workload.
 
         Returns:
@@ -50,7 +50,7 @@ class VhtBackend:
          """
         raise NotImplementedError()
 
-    def cleanup(self, state: VhtBackendState):
+    def cleanup(self, state: AvhBackendState):
         """Cleanup the backend.
         The backend is brought back into state before call to prepare.
 

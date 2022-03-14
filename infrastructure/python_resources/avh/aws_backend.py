@@ -11,10 +11,10 @@ from botocore.exceptions import WaiterError
 from pathlib import Path
 from typing import List, Union
 
-from .backend import VhtBackend, VhtBackendState
+from .avh_backend import AvhBackend, AvhBackendState
 
 
-class AwsBackend(VhtBackend):
+class AwsBackend(AvhBackend):
     AMI_WORKDIR = '/home/ubuntu'
 
     @staticmethod
@@ -645,27 +645,27 @@ class AwsBackend(VhtBackend):
         logging.debug(f"aws:get_ssm_command_id_stderr_url:{response}")
         return response['CommandInvocations'][0]['StandardErrorUrl']
 
-    def create_or_start_instance(self) -> VhtBackendState:
+    def create_or_start_instance(self) -> AvhBackendState:
         self._init()
         if self.instance_id:
             state = self.get_instance_state()
             if state == "running":
                 logging.info(f"aws:EC2 Instance {self.instance_id} already running!")
-                return VhtBackendState.RUNNING
+                return AvhBackendState.RUNNING
             elif state == "stopped":
                 logging.info(f"aws:EC2 Instance {self.instance_id} provided!")
                 self.start_instance()
-                return VhtBackendState.STARTED
+                return AvhBackendState.STARTED
             else:
                 logging.warning(f"aws:EC2 Instance {self.instance_id} cannot be reused from state '{state}'!")
 
         self.create_instance()
-        return VhtBackendState.CREATED
+        return AvhBackendState.CREATED
 
-    def prepare(self) -> VhtBackendState:
+    def prepare(self) -> AvhBackendState:
         self._init()
         state = self.create_or_start_instance()
-        if state == VhtBackendState.CREATED:
+        if state == AvhBackendState.CREATED:
             commands = [
                 f"runuser -l ubuntu -c 'cat ~/.bashrc | grep export > {self.AMI_WORKDIR}/vars'",
                 f"runuser -l ubuntu -c 'rm -rf {self.AMI_WORKDIR}/workspace'",
@@ -1084,9 +1084,9 @@ class AwsBackend(VhtBackend):
 
     def cleanup(self, state):
         self._init()
-        if (state == VhtBackendState.RUNNING) or (state == VhtBackendState.INVALID):
+        if (state == AvhBackendState.RUNNING) or (state == AvhBackendState.INVALID):
             pass
-        elif (state == VhtBackendState.STARTED) or self.keep_ec2_instance:
+        elif (state == AvhBackendState.STARTED) or self.keep_ec2_instance:
             self.stop_instance()
         else:
             self.terminate_instance()

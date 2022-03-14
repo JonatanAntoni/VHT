@@ -9,14 +9,14 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import List
 
-from .backend import VhtBackend, VhtBackendState
+from .avh_backend import AvhBackend, AvhBackendState
 from .helper import create_archive
 
 
-class VHTClient:
+class AvhClient:
     @staticmethod
     def get_available_backends() -> List[str]:
-        backends = VhtBackend.find_implementations()
+        backends = AvhBackend.find_implementations()
         return sorted(backends.keys(), key=lambda k: backends[k].priority())
 
     def __init__(self, backend):
@@ -25,18 +25,18 @@ class VHTClient:
         self._set_backend()
 
     def _set_backend(self):
-        backends = VhtBackend.find_implementations()
+        backends = AvhBackend.find_implementations()
         if self.backend_desc in backends:
             self.backend = backends[self.backend_desc]()
         else:
             logging.error(f"{self.backend_desc} not supported!")
             raise RuntimeError()
 
-    def prepare(self)  -> VhtBackendState:
+    def prepare(self)  -> AvhBackendState:
         """Prepare the backend to execute VHT workload."""
         return self.backend.prepare()
 
-    def cleanup(self, state: VhtBackendState = VhtBackendState.CREATED):
+    def cleanup(self, state: AvhBackendState = AvhBackendState.CREATED):
         """Cleanup backend into a former state.
         Args:
             state: The state to turn backend into.
@@ -50,7 +50,7 @@ class VHTClient:
         """
         vhtin = None
         vhtout = None
-        backend_state = VhtBackendState.INVALID
+        backend_state = AvhBackendState.INVALID
 
         if not specfile.exists():
             raise RuntimeError from FileNotFoundError(specfile)

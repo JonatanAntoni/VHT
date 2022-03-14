@@ -12,10 +12,10 @@ from inspect import signature, Signature
 from itertools import islice
 from types import FunctionType
 
-from vht import VHTClient, VhtBackend
+from avh import AvhClient, AvhBackend
 
 
-class VhtCli:
+class AvhCli:
     def __init__(self):
         parser = self._parser()
 
@@ -26,7 +26,7 @@ class VhtCli:
             logging.debug("Verbosity level is set to %s", verbosity)
 
         # vht_instance using args.backend
-        vht_client = VHTClient(args.backend)
+        vht_client = AvhClient(args.backend)
 
         self._add_commands(parser)
         self._add_backend_args(parser, vht_client.backend)
@@ -35,7 +35,7 @@ class VhtCli:
 
         self._consume_backend_args(vht_client.backend, args)
 
-        func = VHTClient.__dict__[args.subcmd.replace('-', '_')]
+        func = AvhClient.__dict__[args.subcmd.replace('-', '_')]
         params = signature(func).parameters
         func_args = [vars(args)[param.replace('-', '_')] for param in islice(params.keys(), 1, None)]
         try:
@@ -61,9 +61,9 @@ class VhtCli:
 
         parser.add_argument('-b', '--backend',
                             type=str,
-                            choices=VHTClient.get_available_backends(),
+                            choices=AvhClient.get_available_backends(),
                             default='aws',
-                            help=f'Select VHT backend to use. Default: {VHTClient.get_available_backends()[0]}')
+                            help=f'Select VHT backend to use. Default: {AvhClient.get_available_backends()[0]}')
 
         return parser
 
@@ -85,15 +85,15 @@ class VhtCli:
         parser.add_argument(f"--{argname.replace('_', '-')}", **kwargs)
 
     @staticmethod
-    def _add_backend_args(parser: ArgumentParser, backend: VhtBackend):
+    def _add_backend_args(parser: ArgumentParser, backend: AvhBackend):
         group = parser.add_argument_group(f"{backend.name()} backend properties")
         for k, v in filter(lambda m: not m[0].startswith('_') and isinstance(m[1], property),
                            backend.__class__.__dict__.items()):
             sig = inspect.signature(v.fget)
-            VhtCli._add_argument(group, k, sig.return_annotation, getattr(backend, k), v.__doc__)
+            AvhCli._add_argument(group, k, sig.return_annotation, getattr(backend, k), v.__doc__)
 
     @staticmethod
-    def _consume_backend_args(backend: VhtBackend, args: Namespace):
+    def _consume_backend_args(backend: AvhBackend, args: Namespace):
         args = vars(args)
         for k, v in filter(lambda m: not m[0].startswith('_') and isinstance(m[1], property),
                            backend.__class__.__dict__.items()):
@@ -107,7 +107,7 @@ class VhtCli:
 
         subparsers = parser.add_subparsers(dest='subcmd', required=True, help='sub-command help')
 
-        for m, n in VHTClient.__dict__.items():
+        for m, n in AvhClient.__dict__.items():
             if isinstance(n, FunctionType) and not m.startswith('_'):
                 func_help = n.__doc__.split('\n')[0] if n.__doc__ else ''
                 subparser = subparsers.add_parser(m.replace('_', '-'), help=func_help)
@@ -116,8 +116,8 @@ class VhtCli:
                     param_help = re.search(f"{param[0]}: (.*)", n.__doc__).group(1) if n.__doc__ else ""
                     param_type = param[1].annotation if param[1].annotation != Signature.empty else str
                     param_default = param[1].default if param[1].default != Signature.empty else None
-                    VhtCli._add_argument(subparser, param[0], param_type, param_default, param_help)
+                    AvhCli._add_argument(subparser, param[0], param_type, param_default, param_help)
 
 
 if __name__ == '__main__':
-    VhtCli()
+    AvhCli()

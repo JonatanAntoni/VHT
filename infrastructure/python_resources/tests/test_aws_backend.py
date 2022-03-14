@@ -6,16 +6,16 @@ import os
 from dateutil.tz import tzutc, tzlocal
 from unittest import TestCase, skip
 from unittest.mock import patch, Mock
-from vht import AwsBackend
+from avh import AwsBackend
 
 # stubbers
 # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/stubber.html#
 # https://stackoverflow.com/questions/37143597/mocking-boto3-s3-client-method-python/37144161#37144161
 
 
-class TestVhtAws(TestCase):
+class TestAwsBackend(TestCase):
     """
-        VHT Core Test Cases
+        Test AWS Backend
     """
     @classmethod
     def setUpClass(cls):

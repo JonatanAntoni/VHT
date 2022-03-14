@@ -8,11 +8,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 from typing import List, Union
 
-from .backend import VhtBackend, VhtBackendState
+from .avh_backend import AvhBackend, AvhBackendState
 from .helper import create_archive
 
 
-class LocalBackend(VhtBackend):
+class LocalBackend(AvhBackend):
 
     @staticmethod
     def name() -> str:
@@ -23,12 +23,12 @@ class LocalBackend(VhtBackend):
         return 50
 
     def __init__(self):
-        self._workdir = TemporaryDirectory(prefix="vhtwork-")
+        self._workdir = TemporaryDirectory(prefix="avhwork-")
 
-    def prepare(self) -> VhtBackendState:
-        return VhtBackendState.RUNNING
+    def prepare(self) -> AvhBackendState:
+        return AvhBackendState.RUNNING
 
-    def cleanup(self, state: VhtBackendState):
+    def cleanup(self, state: AvhBackendState):
         logging.info("Cleaning up %s", self._workdir.name)
         self._workdir.cleanup()
 
