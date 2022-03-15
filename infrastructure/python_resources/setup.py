@@ -3,7 +3,7 @@
 import re
 import subprocess
 
-from setuptools import setup
+from setuptools import setup, find_namespace_packages
 
 
 def version_from_git_tag():
@@ -25,9 +25,9 @@ def version_from_git_tag():
 
 
 setup(
-    name='arm-virtual-hardware',
+    name='arm-vhclient',
     version='0.1.0',
-    packages=['avh'],
+    packages=find_namespace_packages(include=['arm.*']),
     install_requires=[
         'boto3~=1.20',
         'botocore~=1.20',
@@ -44,7 +44,7 @@ setup(
         ]
     },
     entry_points={
-        'console_scripts': ['avh=avh.avh_cli:AvhCli']
+        'console_scripts': ['arm-vhc=arm.vhclient.avh_cli:AvhCli']
     },
     python_requires='>=3.8',
     url='',

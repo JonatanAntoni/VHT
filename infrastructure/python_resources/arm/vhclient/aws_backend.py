@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-from tempfile import NamedTemporaryFile
-
 import boto3
 import logging
 import os
@@ -9,6 +7,7 @@ import time
 from botocore.exceptions import ClientError
 from botocore.exceptions import WaiterError
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import List, Union
 
 from .avh_backend import AvhBackend, AvhBackendState
@@ -134,13 +133,13 @@ class AwsBackend(AvhBackend):
         self._s3_keyprefix = value
 
     """
-    VHT AWS Backend
+    AVH AWS Backend
 
     This backend runs in your Amazon account:
-     * Creates/starts/setup a [new] VHT EC2 instance.
-     * Run VHT-related commands.
+     * Creates/starts/setup a [new] AVH EC2 instance.
+     * Run AVH-related commands.
      * Get the outputs
-     * Terminates/Stops the VHT EC2 instance.
+     * Terminates/Stops the AVH EC2 instance.
 
     The AWS credentials key is expected as envs. See _is_aws_credentials_present method.
     Some AWS-related info is expected as envs. See _setup.
@@ -216,7 +215,7 @@ class AwsBackend(AvhBackend):
         """
             Setup AWS object by collecting env vars & preparing AWS instance
         """
-        # Initializing None all VHT related variables
+        # Initializing None all AVH related variables
         logging.info("aws:setting up aws backend")
 
         # EC2-related info is not needed if an instance is already created
@@ -284,7 +283,7 @@ class AwsBackend(AvhBackend):
             Create an EC2 Instance. It is a wrapper for create_ec2_instance.
             If key_name is present, it creates a instance with the selected private key.
 
-            This is a mandatory VHT backend method.
+            This is a mandatory AVH backend method.
         """
         self._init()
         self.instance_id = self.create_ec2_instance(
@@ -297,7 +296,7 @@ class AwsBackend(AvhBackend):
             SubnetId=self.subnet_id,
             TagSpecifications=[{'ResourceType': 'instance', 'Tags': [
                 {'Key': 'Name', 'Value': self.instance_name},
-                {'Key': 'VHT_CLI', 'Value': 'true'}
+                {'Key': 'AVH_CLI', 'Value': 'true'}
             ]}],
             IamInstanceProfile={'Name': self.iam_profile}
         )
@@ -369,7 +368,7 @@ class AwsBackend(AvhBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.delete_object
 
-        This is a mandatory VHT backend method.
+        This is a mandatory AVH backend method.
         """
         self._init()
         logging.info(f"aws:Delete S3 Object from S3 Bucket {self.s3_bucket_name}, Key {key}")
@@ -397,7 +396,7 @@ class AwsBackend(AvhBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.download_file
 
-        This is a mandatory VHT backend method.
+        This is a mandatory AVH backend method.
         """
         self._init()
         logging.info("aws:Download S3 File")
@@ -411,20 +410,20 @@ class AwsBackend(AvhBackend):
 
     def get_image_id(self):
         """
-        Get the VHT AMI ID for the region
-        The VHT AMI ID changes for each AWS region
+        Get the AVH AMI ID for the region
+        The AVH AMI ID changes for each AWS region
 
         Return
         ----------
         String
-            VHT AMI ID
+            AVH AMI ID
 
         More
         ----
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.describe_images
 
-        This is a mandatory VHT backend method.
+        This is a mandatory AVH backend method.
         """
         assert self.ami_version is not None, \
             "The variable `ami_version` is not present"
@@ -775,17 +774,17 @@ class AwsBackend(AvhBackend):
         ------
             JSON data from send_ssm_shell_command method.
 
-        This is a mandatory VHT backend method.
+        This is a mandatory AVH backend method.
         """
         self._init()
-        logging.info(f"vht: command_list = {command_list}")
+        logging.info(f"avh: command_list = {command_list}")
         response = self.send_ssm_shell_command(
             command_list=command_list,
             working_dir=working_dir
         )
 
         for i in response.keys():
-            logging.info(f"vht:{i} = {response[i].strip()}")
+            logging.info(f"avh:{i} = {response[i].strip()}")
         if response['CommandIdStatus'] != 'Success' and fail_if_unsuccess:
             logging.error(f"Command {command_list} failed")
             raise RuntimeError()
@@ -809,10 +808,10 @@ class AwsBackend(AvhBackend):
         ------
             JSON data from send_ssm_shell_command method.
 
-        This is a mandatory VHT backend method.
+        This is a mandatory AVH backend method.
         """
         self._init()
-        logging.info(f"vht: command_list = {command_list}")
+        logging.info(f"avh: command_list = {command_list}")
         all_responses = []
 
         for command in command_list:
@@ -823,7 +822,7 @@ class AwsBackend(AvhBackend):
                     fail_if_unsuccess=fail_if_unsuccess
                 )
             )
-        logging.debug(f"vht: all_responses = {all_responses}")
+        logging.debug(f"avh: all_responses = {all_responses}")
         return all_responses
 
     def send_ssm_shell_command(self,
@@ -937,7 +936,7 @@ class AwsBackend(AvhBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.start_instances
 
-        This is a mandatory VHT backend method.
+        This is a mandatory AVH backend method.
         """
         self._init()
         logging.info(f"aws:Starting EC2 instance {self.instance_id}")
@@ -966,7 +965,7 @@ class AwsBackend(AvhBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.stop_instances
 
-        This is a mandatory VHT backend method.
+        This is a mandatory AVH backend method.
         """
         self._init()
         logging.info(f"aws:Stopping EC2 instance {self.instance_id}")
@@ -1129,7 +1128,7 @@ class AwsBackend(AvhBackend):
         API Definition
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.terminate_instances
 
-        This is a mandatory VHT backend method.
+        This is a mandatory AVH backend method.
         """
         self._init()
         logging.debug('aws:terminate_instance: DryRun=True to test for permission check')

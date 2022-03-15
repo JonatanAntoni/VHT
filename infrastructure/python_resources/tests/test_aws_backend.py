@@ -6,7 +6,7 @@ import os
 from dateutil.tz import tzutc, tzlocal
 from unittest import TestCase, skip
 from unittest.mock import patch, Mock
-from avh import AwsBackend
+from arm.vhclient import AwsBackend
 
 # stubbers
 # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/stubber.html#
@@ -39,7 +39,7 @@ class TestAwsBackend(TestCase):
         for k in filter(lambda v: v.startswith("AWS_"), os.environ.keys()):
             del os.environ[k]
 
-    def get_vht_aws_instance(self):
+    def get_avh_aws_instance(self):
         self.set_mandatory_env_vars()
         self.set_create_instance_env_vars()
         self.set_ami_id_env()
@@ -100,7 +100,7 @@ class TestAwsBackend(TestCase):
     def del_s3_keyprefix_env(self):
         del os.environ["AWS_S3_KEYPREFIX"]
 
-    def test_vht_aws_setup(self):
+    def test_avh_aws_setup(self):
         with patch.object(AwsBackend, '_is_aws_credentials_present', return_value=True):
             self.set_mandatory_env_vars()
             self.set_create_instance_env_vars()
@@ -167,7 +167,7 @@ class TestAwsBackend(TestCase):
             self.assertEqual(self.data['AWS_S3_KEYPREFIX'], aws_client.s3_keyprefix)
 
     def test_create_instance(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         # mocking methods
         aws_client._ec2_client.run_instances = Mock()
@@ -309,7 +309,7 @@ class TestAwsBackend(TestCase):
         self.assertEqual('i-064a8d261aea65d9e', instance_id)
 
     def test_delete_file_from_cloud(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         # mocking methods
         aws_client._s3_client.delete_object = Mock()
@@ -325,7 +325,7 @@ class TestAwsBackend(TestCase):
         self.assertIs(response, None)
 
     def test_download_file_from_cloud(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         # mocking methods
         aws_client._s3_client.download_file = Mock()
@@ -341,7 +341,7 @@ class TestAwsBackend(TestCase):
         self.assertIs(response, None)
 
     def test_get_image_id(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
         aws_client.ami_version = self.data['AWS_AMI_VERSION']
 
         # mocking methods
@@ -407,7 +407,7 @@ class TestAwsBackend(TestCase):
         self.assertEqual('ami-0c5eeabe11f3a2685', response)
 
     def test_get_instance_state(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         # mocking methods
         aws_client._ec2_client.describe_instances = Mock()
@@ -559,7 +559,7 @@ class TestAwsBackend(TestCase):
 
     @skip('Find out how to mock s3_resource.Object.get')
     def test_get_s3_file_content(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         # mocking methods
         # setting return values for the mocked methods
@@ -575,7 +575,7 @@ class TestAwsBackend(TestCase):
         self.assertEqual("drwxr-xr-x  13 root root  4096 Apr 30  2021 var", response)
 
     def test_get_s3_ssm_command_id_key(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         command_id = '8f181e5d-8fec-45fa-9bfa-812e76df650c'
         output_type = 'stdout'
@@ -586,7 +586,7 @@ class TestAwsBackend(TestCase):
         self.assertEqual(expected_response, response)
 
     def test_get_ssm_command_id_status(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         # mocking methods
         aws_client._ssm_client.list_commands = Mock()
@@ -654,7 +654,7 @@ class TestAwsBackend(TestCase):
         self.assertEqual('Success', response)
 
     def test_get_ssm_command_id_status_details(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         # mocking methods
         aws_client._ssm_client.get_command_invocation = Mock()
@@ -706,7 +706,7 @@ class TestAwsBackend(TestCase):
         self.assertEqual('Success', response)
 
     def test_get_ssm_command_id_stdout_url(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         # mocking methods
         aws_client._ssm_client.list_command_invocations = Mock()
@@ -762,7 +762,7 @@ class TestAwsBackend(TestCase):
         self.assertEqual('https://s3.eu-west-1.amazonaws.com/gh-orta-vht/ssm/da584039-585c-4fd7-b30f-fad58c42c881/i-000f2435623398464/awsrunShellScript/0.awsrunShellScript/stdout', response)
 
     def test_get_ssm_command_id_stderr_url(self):
-        aws_client = self.get_vht_aws_instance()
+        aws_client = self.get_avh_aws_instance()
 
         # mocking methods
         aws_client._ssm_client.list_command_invocations = Mock()

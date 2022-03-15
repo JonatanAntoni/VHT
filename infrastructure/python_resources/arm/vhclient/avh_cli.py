@@ -10,9 +10,9 @@ from enum import Enum
 from gettext import gettext as _
 from inspect import signature, Signature
 from itertools import islice
-from types import FunctionType
+from types import FunctionType, GenericAlias
 
-from avh import AvhClient, AvhBackend
+from arm.vhclient import AvhClient, AvhBackend
 
 
 class AvhCli:
@@ -25,21 +25,20 @@ class AvhCli:
             logging.basicConfig(format='[%(levelname)s]\t%(message)s', level=verbosity)
             logging.debug("Verbosity level is set to %s", verbosity)
 
-        # vht_instance using args.backend
-        vht_client = AvhClient(args.backend)
+        avh_client = AvhClient(args.backend)
 
         self._add_commands(parser)
-        self._add_backend_args(parser, vht_client.backend)
+        self._add_backend_args(parser, avh_client.backend)
 
         args = parser.parse_args()
 
-        self._consume_backend_args(vht_client.backend, args)
+        self._consume_backend_args(avh_client.backend, args)
 
         func = AvhClient.__dict__[args.subcmd.replace('-', '_')]
         params = signature(func).parameters
         func_args = [vars(args)[param.replace('-', '_')] for param in islice(params.keys(), 1, None)]
         try:
-            func(vht_client, *func_args)
+            func(avh_client, *func_args)
         except RuntimeError as e:
             if e.__cause__:
                 logging.error(e.__cause__.__doc__)
@@ -63,7 +62,7 @@ class AvhCli:
                             type=str,
                             choices=AvhClient.get_available_backends(),
                             default='aws',
-                            help=f'Select VHT backend to use. Default: {AvhClient.get_available_backends()[0]}')
+                            help=f'Select AVH backend to use. Default: {AvhClient.get_available_backends()[0]}')
 
         return parser
 
@@ -72,6 +71,9 @@ class AvhCli:
         kwargs = {'help': helptext, 'required': default is None}
         if argtype is bool:
             kwargs['action'] = 'store_true'
+        elif isinstance(argtype, GenericAlias):
+            if isinstance(argtype(), list):
+                kwargs['nargs'] = '+' if default is None else '*'
         elif issubclass(argtype, Enum):
             kwargs['choices'] = list(filter(lambda v: v.value, argtype))
             kwargs['type'] = type(kwargs['choices'][0])

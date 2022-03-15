@@ -43,7 +43,7 @@ class AvhBackend:
         raise NotImplementedError()
 
     def prepare(self) -> AvhBackendState:
-        """Runs required commands to prepare the backend for VHT workload.
+        """Runs required commands to prepare the backend for AVH workload.
 
         Returns:
             The BackendState the backend was is before.
