@@ -18,14 +18,15 @@ class AvhSpec:
         """AVH spec file
 
         Format of the specfile:
-            name: The name of the workload
-            workdir: The local directory to use as the workspace, defaults to specfile's parent.
-            backend: Dictionary with backend specific parameters
-              aws: AWS backend specific parameters (see backend help)
-            upload: List of glob patterns of files to be sent to the AVH backend. (see glob format)
-            steps: List of steps to be executed on the AVH backend.
+            name: (optional) The name of the workload.
+            workdir: (optional) The local directory to use as the workspace, defaults to specfile's parent.
+            backend: (optional) Dictionary with backend specific parameters.
+              aws: (optional) Dictionary with AWS backend specific parameters. (see backend help)
+              local: (optional) Dictionary with local backend specific parameters. (see backend help)
+            upload: (optional) List of glob patterns of files to be sent to the AVH backend. (see glob format)
+            steps: (mandatory) List of steps to be executed on the AVH backend.
               - run: String written into a bash script and executed on the AVH backend inside the workspace directory.
-            download: List of glob patterns of files to be retrieved back from the AVH backend.  (see glob format)
+            download: (optional) List of glob patterns of files to be retrieved back from the AVH backend. (see glob format)
 
         Glob format:
             The list of glob patterns is evaluated in order.

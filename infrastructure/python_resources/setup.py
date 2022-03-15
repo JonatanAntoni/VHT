@@ -44,7 +44,7 @@ setup(
         ]
     },
     entry_points={
-        'console_scripts': ['arm-vhc=arm.vhclient.avh_cli:AvhCli']
+        'console_scripts': ['arm-vhclient=arm.vhclient.avh_cli:AvhCli']
     },
     python_requires='>=3.8',
     url='',

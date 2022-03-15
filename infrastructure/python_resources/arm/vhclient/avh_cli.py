@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import inspect
 import logging
@@ -119,7 +118,3 @@ class AvhCli:
                     param_type = param[1].annotation if param[1].annotation != Signature.empty else str
                     param_default = param[1].default if param[1].default != Signature.empty else None
                     AvhCli._add_argument(subparser, param[0], param_type, param_default, param_help)
-
-
-if __name__ == '__main__':
-    AvhCli()
