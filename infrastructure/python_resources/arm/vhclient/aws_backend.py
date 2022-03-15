@@ -667,14 +667,17 @@ class AwsBackend(AvhBackend):
         if state == AvhBackendState.CREATED:
             commands = [
                 f"runuser -l ubuntu -c 'cat ~/.bashrc | grep export > {self.AMI_WORKDIR}/vars'",
-                f"runuser -l ubuntu -c 'rm -rf {self.AMI_WORKDIR}/workspace'",
-                f"runuser -l ubuntu -c 'mkdir -p {self.AMI_WORKDIR}/workspace'",
                 f"runuser -l ubuntu -c 'mkdir -p {self.AMI_WORKDIR}/packs/.Web'",
                 f"runuser -l ubuntu -c 'wget -N https://www.keil.com/pack/index.pidx -O {self.AMI_WORKDIR}/packs/.Web/index.pidx'",
                 "apt update",
                 "apt install awscli -y"
             ]
             self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
+        commands = [
+            f"runuser -l ubuntu -c 'rm -rf {self.AMI_WORKDIR}/workspace'",
+            f"runuser -l ubuntu -c 'mkdir -p {self.AMI_WORKDIR}/workspace'"
+        ]
+        self.send_remote_command_batch(commands, working_dir=self.AMI_WORKDIR)
         return state
 
     def run_commands(self, cmds: List[str]):
