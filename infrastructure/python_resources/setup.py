@@ -31,7 +31,8 @@ setup(
     install_requires=[
         'boto3~=1.20',
         'botocore~=1.20',
-        'PyYAML~=6.0'
+        'PyYAML~=6.0',
+        'semantic_version~=2.9'
     ],
     extras_require={
         'dev': [

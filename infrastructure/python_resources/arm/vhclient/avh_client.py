@@ -138,7 +138,7 @@ class AvhClient:
         """
         self.backend.cleanup(state)
 
-    def execute(self, specfile: Path = Path("./vhclient.yml")):
+    def execute(self, specfile: Path = Path("./avh.yml")):
         """Execute the AVH job specified by given specfile.
 
         Args:

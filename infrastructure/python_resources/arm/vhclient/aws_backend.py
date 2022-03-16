@@ -7,6 +7,7 @@ import time
 from botocore.exceptions import ClientError
 from botocore.exceptions import WaiterError
 from pathlib import Path
+from semantic_version import Version, SimpleSpec
 from tempfile import NamedTemporaryFile
 from typing import List, Union
 
@@ -35,8 +36,8 @@ class AwsBackend(AvhBackend):
 
     @property
     def ami_version(self) -> str:
-        """Amazon Machine Image version (AWS_AMI_VERSION)."""
-        return self._ami_version or os.environ.get('AWS_AMI_VERSION', '')
+        """Amazon Machine Image version (AWS_AMI_VERSION). Must be a valid PEP-440 version specifier."""
+        return self._ami_version or os.environ.get('AWS_AMI_VERSION', '==*')
 
     @ami_version.setter
     def ami_version(self, value: str):
@@ -229,9 +230,6 @@ class AwsBackend(AvhBackend):
                 self.instance_name = f"{user}@{host}"
 
             if not self.ami_id:
-                if not self.ami_version:
-                    logging.error("Either `AWS_AMI_ID` or `AWS_AMI_VERSION` should be presented as env var!")
-                    raise RuntimeError("Either `AWS_AMI_ID` or `AWS_AMI_VERSION` should be presented as env var!")
                 self.ami_id = self.get_image_id()
             if not self.ami_id:
                 logging.error('AWS_AMI_ID must not be blank. You should inform either AWS_AMI_ID or provide a valid AWS_AMI_VERSION')
@@ -434,7 +432,7 @@ class AwsBackend(AvhBackend):
                     {
                         'Name': 'name',
                         'Values': [
-                            f"ArmVirtualHardware-{self.ami_version}*"
+                            f"ArmVirtualHardware-*"
                         ]
                     },
                 ]
@@ -442,8 +440,26 @@ class AwsBackend(AvhBackend):
         except ClientError as e:
             raise RuntimeError from e
 
-        logging.debug(f"aws:get_vht_ami_id_by_version:{response}")
-        self.ami_id = response['Images'][0]['ImageId']
+        logging.debug("aws:get_vht_ami_id_by_version:%s", response)
+
+        version_spec = SimpleSpec(self.ami_version)
+        images = dict()
+        for image in response['Images']:
+            ver = image['Name'].split('-')[1]
+            try:
+                images[Version(ver)] = image['ImageId']
+            except ValueError as e:
+                logging.debug("aws:get_vht_ami_id_by_version:Invalid version identifier found: %s", ver)
+        versions = sorted(version_spec.filter(images.keys()), reverse=True)
+
+        if not versions:
+            logging.error("aws:get_vht_ami_id_by_version:No AMI found matching version spec %s", self.ami_version)
+            logging.error("aws:get_vht_ami_id_by_version:Available AMI versions %s", sorted([str(v) for v in images.keys()], reverse=True))
+            raise RuntimeError()
+
+        logging.info("aws:get_vht_ami_id_by_version:Selecting AMI version %s", versions[0])
+
+        self.ami_id = images[versions[0]]
         return self.ami_id
 
     def get_instance_state(self):
